@@ -3,8 +3,12 @@ package idem
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
+	"io"
+	"os"
+	"os/exec"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -66,6 +70,24 @@ type HostConfig struct {
 	Password string
 }
 
+func (h *HostConfig) Dial(network string) (*ssh.Client, error) {
+	// get a client
+	// this should be its own function later
+	sshConfig := &ssh.ClientConfig {
+		User: h.User,
+		Auth: []ssh.AuthMethod {
+			ssh.Password(h.Password),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: dont use this
+	}
+	port := h.Port
+	if port == 0 {
+		port = 22
+	}
+	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", h.Host, port), sshConfig)
+	return client, err
+}
+
 func run(client *ssh.Client, cmd string, sudo bool) (string, error) {
 	session, err := client.NewSession()
 	if err != nil {
@@ -116,21 +138,7 @@ func (cfg *UserConfig) Groups(groups ...string) *UserConfig {
 // TODO: support other types... Make this polymorphic
 func Run(h *HostConfig, want *UserConfig) (res *Result) {
 	res = &Result{}
-	// get a client
-	// this should be its own function later
-	sshConfig := &ssh.ClientConfig {
-		User: h.User,
-		Auth: []ssh.AuthMethod {
-			ssh.Password(h.Password),
-		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: dont use this
-	}
-	port := h.Port
-	if port == 0 {
-		port = 80
-	}
-
-	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", h.Host, port), sshConfig)
+	client, err := h.Dial("tcp")
 	if err != nil {
 		res.Err = err
 		return
@@ -167,4 +175,101 @@ func Run(h *HostConfig, want *UserConfig) (res *Result) {
 	}
 
 	return res
+}
+
+func poorManScp(client *ssh.Client, r io.Reader, dstPath string) error {
+	ses, err := client.NewSession()
+	if err != nil {
+		return err
+	}
+	defer ses.Close()
+
+	w, err := ses.StdinPipe()
+	if err != nil {
+		return err
+	}
+	defer w.Close()
+
+	// fmt.Println("poorManScp enter")
+	// _, err = io.Copy(w, r)
+	// fmt.Println("poorManScp done")
+	// w.Close()
+
+	go func() {
+		defer w.Close()
+		io.Copy(w, r)
+	}()
+
+	// NOTE: dumb paths will cause bugs or injections, but its fine since we
+	// pass the paths ourselves not from user input
+	err = ses.Run(fmt.Sprintf("cat > %s", dstPath))
+	return err
+}
+
+func runBin(h *HostConfig, stdin io.Reader, path string) ([]byte, error) {
+	client, err := h.Dial("tcp")
+	if err != nil {
+		return nil, err
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	base := filepath.Base(path)
+	dstPath := filepath.Join("/tmp", base)
+	err = poorManScp(client, file, dstPath)
+	if err != nil {
+		return nil, err
+	}
+
+	ses, err := client.NewSession()
+	if err != nil {
+		return nil, err
+	}
+	defer ses.Close()
+
+	// NOTE: better not put dumb dstPath
+	err = ses.Run(fmt.Sprintf("chmod +x %s", dstPath))
+	if err != nil {
+		return nil, err
+	}
+
+	// now we have the binary. Lets run it
+	binSes, err := client.NewSession()
+	if err != nil {
+		return nil, err
+	}
+	defer binSes.Close()
+
+	binSes.Stdin = stdin
+	cmd := dstPath
+	if h.Sudo {
+		cmd = "sudo " + dstPath
+	}
+	out, err := binSes.CombinedOutput(cmd)
+	if err != nil {
+		return out, err
+	}
+
+	return out, err
+}
+
+func RunBin(h *HostConfig, want *UserConfig) ([]byte, error) {
+	// compile
+	// TODO: embed these source files
+	c := exec.Cmd{
+		Path: "/usr/bin/go",
+		Args: []string{"go", "build", "-o", "/tmp/idem_user", "./remote/user/"},
+		Env: append(os.Environ(),
+			"CGO_ENABLED=0",
+		),
+	}
+	err := c.Run()
+	if err != nil {
+		return nil, err
+	}
+	out, err := runBin(h, strings.NewReader(`{"name": "user123"}`), "/tmp/idem_user")
+	return out, err
 }
