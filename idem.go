@@ -1,10 +1,8 @@
 package idem
 
 import (
-	"errors"
 	"fmt"
 	"path/filepath"
-	"slices"
 	"strings"
 	"io"
 	"os"
@@ -12,55 +10,6 @@ import (
 
 	"golang.org/x/crypto/ssh"
 )
-
-// TODO: worry about "%s" idk shell injections
-
-type UserState struct {
-	Name string
-	Exists bool
-	Groups []string
-}
-
-func getUserState(client *ssh.Client, name string, sudo bool) (*UserState, error) {
-	state := &UserState{ Name: "name" }
-	_, err := run(client, fmt.Sprintf("id %s", name), sudo) // injection?
-	if err == nil {
-		state.Exists = true
-	} else {
-		exitErr, _ := errors.AsType[*ssh.ExitError](err)
-		if exitErr == nil { // command didnt even run
-			return state, err
-		}
-		if exitErr.ExitStatus() != 1 { // run but weird exit
-			return state, err
-		}
-	}
-
-	if !state.Exists {
-		return state, nil
-	}
-
-	// groups
-	out, err := run(client, fmt.Sprintf("id -Gn %s", name), sudo)
-	if err != nil {
-		return state, err
-	}
-	out = out[:len(out)-1] // trim new line character
-	state.Groups = strings.Split(out, " ")
-
-	return state, nil
-}
-
-type CommandResult struct {
-	Cmd string
-	Output string
-}
-
-type Result struct {
-	Changed bool
-	Commands []*CommandResult
-	Err error
-}
 
 type HostConfig struct {
 	Host string
@@ -88,30 +37,38 @@ func (h *HostConfig) Dial(network string) (*ssh.Client, error) {
 	return client, err
 }
 
-func run(client *ssh.Client, cmd string, sudo bool) (string, error) {
-	session, err := client.NewSession()
+func poorManScp(client *ssh.Client, r io.Reader, dstPath string) error {
+	ses, err := client.NewSession()
 	if err != nil {
-		return "", err
+		return err
 	}
-	defer session.Close()
+	defer ses.Close()
 
-	if sudo {
-		cmd = "sudo " + cmd
-	}
-	out, err := session.CombinedOutput(cmd)
-	return string(out), err
-}
-
-func runAppend(client *ssh.Client, cmd string, sudo bool, res *Result) error {
-	out, err := run(client, cmd, sudo)
-	if res != nil {
-		res.Commands = append(res.Commands, &CommandResult { cmd, out })
-	}
+	w, err := ses.StdinPipe()
 	if err != nil {
-		res.Err = err
+		return err
 	}
+
+	// io.Copy will block if cat is not running
+	go func() {
+		defer w.Close()
+		io.Copy(w, r)
+	}()
+
+	// NOTE: dumb paths will cause bugs or injections, but its fine since we
+	// pass the paths ourselves not from user input
+	err = ses.Run(fmt.Sprintf("cat > %s", dstPath))
 	return err
 }
+
+
+
+type UserState struct {
+	Name string
+	Exists bool
+	Groups []string
+}
+
 
 type UserConfig struct {
 	Name string
@@ -135,76 +92,6 @@ func (cfg *UserConfig) Groups(groups ...string) *UserConfig {
 	return cfg
 }
 
-// TODO: support other types... Make this polymorphic
-func Run(h *HostConfig, want *UserConfig) (res *Result) {
-	res = &Result{}
-	client, err := h.Dial("tcp")
-	if err != nil {
-		res.Err = err
-		return
-	}
-
-	state, err := getUserState(client, want.Name, h.Sudo)
-	if err != nil {
-		res.Err = fmt.Errorf("can't get user state: %w", err)
-		return
-	}
-
-	if !state.Exists {
-		// TODO: handle passwords
-		err = runAppend(client, fmt.Sprintf("adduser -D %s", want.Name), h.Sudo, res)
-		if err != nil {
-			return
-		}
-		res.Changed = true
-	}
-
-	for _, g := range want.groups {
-		// skip if already exists
-		if slices.Index(state.Groups, g) != -1 {
-			continue
-		}
-
-		cmd := fmt.Sprintf("addgroup %s %s", want.Name, g)
-		err = runAppend(client, cmd, h.Sudo, res)
-		if err != nil {
-			return
-		}
-		res.Changed = true
-		state.Groups = append(state.Groups, g) // <-- critical fix
-	}
-
-	return res
-}
-
-func poorManScp(client *ssh.Client, r io.Reader, dstPath string) error {
-	ses, err := client.NewSession()
-	if err != nil {
-		return err
-	}
-	defer ses.Close()
-
-	w, err := ses.StdinPipe()
-	if err != nil {
-		return err
-	}
-	defer w.Close()
-
-	// fmt.Println("poorManScp enter")
-	// _, err = io.Copy(w, r)
-	// fmt.Println("poorManScp done")
-	// w.Close()
-
-	go func() {
-		defer w.Close()
-		io.Copy(w, r)
-	}()
-
-	// NOTE: dumb paths will cause bugs or injections, but its fine since we
-	// pass the paths ourselves not from user input
-	err = ses.Run(fmt.Sprintf("cat > %s", dstPath))
-	return err
-}
 
 func runBin(h *HostConfig, stdin io.Reader, path string) ([]byte, error) {
 	client, err := h.Dial("tcp")
@@ -256,9 +143,8 @@ func runBin(h *HostConfig, stdin io.Reader, path string) ([]byte, error) {
 	return out, err
 }
 
-func RunBin(h *HostConfig, want *UserConfig) ([]byte, error) {
-	// compile
-	// TODO: embed these source files
+func (u *UserConfig) Run(h *HostConfig) ([]byte, error) {
+	// TODO: embed these source files and precompile them instead of compiling everytime
 	c := exec.Cmd{
 		Path: "/usr/bin/go",
 		Args: []string{"go", "build", "-o", "/tmp/idem_user", "./remote/user/"},
