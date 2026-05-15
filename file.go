@@ -12,7 +12,6 @@ type FileResult share.FileResult
 func File(path string) *FileConfig {
 	return &FileConfig{
 		F_path: path,
-		F_mode: 0644,
 	}
 }
 

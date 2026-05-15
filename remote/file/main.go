@@ -12,6 +12,8 @@ import (
 	"github.com/msaher/idem/share"
 )
 
+// TODO: support content
+
 func currentState(path string, res *share.FileResult) error {
 	// get current state
 	info, err := os.Stat(path)
