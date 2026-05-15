@@ -5,15 +5,22 @@ import (
 	"testing"
 
 	"github.com/msaher/idem"
+	"golang.org/x/crypto/ssh"
 )
 
 func TestUser(t *testing.T) {
+	sshConfig := &ssh.ClientConfig {
+		User: "myuser",
+		Auth: []ssh.AuthMethod {
+			ssh.Password("myuserpass"),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
 	h := &idem.HostConfig {
 		Host: "127.0.0.1",
 		Port: 8022,
-		User: "myuser",
-		Password: "myuserpass",
 		Sudo: true,
+		SshConfig: sshConfig,
 	}
 	cfg := idem.User("user123").
 	Groups("wheel", "video", "bleh")

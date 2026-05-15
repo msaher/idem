@@ -17,27 +17,18 @@ import (
 var binaries embed.FS
 
 type HostConfig struct {
-	Host string
-	Port int
-	User string
-	Sudo bool
-	Password string
-	DryRun bool
+	Host      string
+	Port      int
+	Sudo      bool
+	SshConfig *ssh.ClientConfig
 }
 
 func (h *HostConfig) Dial(network string) (*ssh.Client, error) {
-	sshConfig := &ssh.ClientConfig {
-		User: h.User,
-		Auth: []ssh.AuthMethod {
-			ssh.Password(h.Password),
-		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: dont use this
-	}
 	port := h.Port
 	if port == 0 {
 		port = 22
 	}
-	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", h.Host, port), sshConfig)
+	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", h.Host, port), h.SshConfig)
 	return client, err
 }
 
