@@ -16,13 +16,15 @@ import (
 //go:embed compile/bin/*
 var binaries embed.FS
 
+var NoOp = errors.New("Host Context has its error set. No action was taken")
+
 type HostCtx struct {
 	Host      string
 	Port      int
 	Sudo      bool
 	SshConfig *ssh.ClientConfig
 	Client *ssh.Client
-	Error error
+	Err error
 }
 
 func (h *HostCtx) dial(network string) (*ssh.Client, error) {
@@ -129,6 +131,10 @@ func runBin(client *ssh.Client, stdin io.Reader, binName string, sudo bool) ([]b
 }
 
 func run(h *HostCtx, req any, bin string, res any) error {
+	if h.Err != nil {
+		return NoOp
+	}
+
 	jsn, err := json.MarshalIndent(req, "", "\t")
 	if err != nil {
 		panic(err)
