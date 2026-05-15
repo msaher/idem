@@ -33,7 +33,7 @@ func (cfg *UserConfig) Groups(groups ...string) *UserConfig {
 }
 
 
-func (u *UserConfig) Run(h *HostConfig) (*UserResult, error) {
+func (u *UserConfig) Run(h *HostCtx) (*UserResult, error) {
 	var res UserResult
 	err := run(h, u, "idem_user", &res)
 	if err != nil {

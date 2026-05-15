@@ -32,7 +32,7 @@ func (fc *FileConfig) State(s string) *FileConfig {
 	return fc
 }
 
-func (fc *FileConfig) Run(h *HostConfig) (*FileResult, error) {
+func (fc *FileConfig) Run(h *HostCtx) (*FileResult, error) {
 	var res FileResult
 	err := run(h, fc, "idem_file", &res)
 	if err != nil {

@@ -16,7 +16,7 @@ func TestUser(t *testing.T) {
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
-	h := &idem.HostConfig {
+	h := &idem.HostCtx {
 		Host: "127.0.0.1",
 		Port: 8022,
 		Sudo: true,

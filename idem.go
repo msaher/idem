@@ -16,20 +16,33 @@ import (
 //go:embed compile/bin/*
 var binaries embed.FS
 
-type HostConfig struct {
+type HostCtx struct {
 	Host      string
 	Port      int
 	Sudo      bool
 	SshConfig *ssh.ClientConfig
+	Client *ssh.Client
+	Error error
 }
 
-func (h *HostConfig) Dial(network string) (*ssh.Client, error) {
+func (h *HostCtx) dial(network string) (*ssh.Client, error) {
+	if h.Client != nil {
+		return h.Client, nil
+	}
 	port := h.Port
 	if port == 0 {
 		port = 22
 	}
 	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", h.Host, port), h.SshConfig)
+	h.Client = client
 	return client, err
+}
+
+func (h *HostCtx) Close() error {
+	if h.Client != nil {
+		return h.Client.Close()
+	}
+	return nil
 }
 
 func poorManScp(client *ssh.Client, r io.Reader, dstPath string) error {
@@ -115,18 +128,17 @@ func runBin(client *ssh.Client, stdin io.Reader, binName string, sudo bool) ([]b
 	return out, err, sent
 }
 
-func run(h *HostConfig, req any, bin string, res any) error {
+func run(h *HostCtx, req any, bin string, res any) error {
 	jsn, err := json.MarshalIndent(req, "", "\t")
 	if err != nil {
 		panic(err)
 	}
 
-	// TODO: might want to reuse clients
-	client, err := h.Dial("tcp")
+
+	client, err := h.dial("tcp")
 	if err != nil {
 		return err
 	}
-	defer client.Close()
 	out, err, sent := runBin(client, bytes.NewReader(jsn), bin, h.Sudo)
 
 	// remove binary if we sent it successfully
