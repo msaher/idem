@@ -20,6 +20,8 @@ func TestUser(t *testing.T) {
 
 	bleh, _ := json.Marshal(cfg)
 	t.Logf("%+v", string(bleh))
-	t.Logf("%#v", res.Err())
 	t.Logf("%+v", res)
+	if res != nil {
+		t.Logf("%#v", res.Err())
+	}
 }

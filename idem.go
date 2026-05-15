@@ -61,55 +61,51 @@ func poorManScp(client *ssh.Client, r io.Reader, dstPath string) error {
 	return err
 }
 
-// TODO: old binary once we run
-func runBin(h *HostConfig, stdin io.Reader, path string) ([]byte, error) {
-	client, err := h.Dial("tcp")
-	if err != nil {
-		return nil, err
-	}
-
+func runBin(client *ssh.Client, stdin io.Reader, path string, sudo bool) ([]byte, error, bool) {
+	sent := false
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, err, sent
 	}
 	defer file.Close()
 	base := filepath.Base(path)
 	dstPath := filepath.Join("/tmp", base)
 	err = poorManScp(client, file, dstPath)
 	if err != nil {
-		return nil, err
+		return nil, err, sent
 	}
+	sent = true
 
 	ses, err := client.NewSession()
 	if err != nil {
-		return nil, err
+		return nil, err, sent
 	}
 	defer ses.Close()
 
 	// NOTE: better not put dumb dstPath
 	err = ses.Run(fmt.Sprintf("chmod +x %s", dstPath))
 	if err != nil {
-		return nil, err
+		return nil, err, sent
 	}
 
 	// now we have the binary. Lets run it
 	binSes, err := client.NewSession()
 	if err != nil {
-		return nil, err
+		return nil, err, sent
 	}
 	defer binSes.Close()
 
 	binSes.Stdin = stdin
 	cmd := dstPath
-	if h.Sudo {
+	if sudo {
 		cmd = "sudo " + dstPath
 	}
 	out, err := binSes.Output(cmd)
 	if err != nil {
-		return out, err
+		return out, err, sent
 	}
 
-	return out, err
+	return out, err, sent
 }
 
 type UserError struct {
@@ -180,7 +176,28 @@ func (u *UserConfig) Run(h *HostConfig) (res *UserResult) {
 		res.err = err
 		return
 	}
-	out, err := runBin(h, bytes.NewReader(jsn), "/tmp/idem_user")
+	// TODO: might want to reuse clients
+	client, err := h.Dial("tcp")
+	if err != nil {
+		return nil
+	}
+	defer client.Close()
+	var sent bool
+	out, err, sent := runBin(client, bytes.NewReader(jsn), "/tmp/idem_user", h.Sudo)
+
+	// remove binary
+	defer func() {
+		if sent {
+			ses, err := client.NewSession()
+			// give up. can't do it
+			if err != nil {
+				return
+			}
+			ses.Run(fmt.Sprintf("rm %s", "/tmp/idem_user"))
+			ses.Close()
+		}
+	}()
+
 	if err != nil {
 		res.err = err
 		return
