@@ -28,6 +28,7 @@ type HostCtx struct {
 }
 
 func (h *HostCtx) dial(network string) (*ssh.Client, error) {
+func (h *HostCtx) dial() (*ssh.Client, error) {
 	if h.Client != nil {
 		return h.Client, nil
 	}
@@ -141,7 +142,7 @@ func run(h *HostCtx, req any, bin string, res any) error {
 	}
 
 
-	client, err := h.dial("tcp")
+	client, err := h.dial()
 	if err != nil {
 		return err
 	}
