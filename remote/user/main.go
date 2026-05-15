@@ -8,25 +8,20 @@ import (
 	"os/exec"
 	"os/user"
 	"slices"
+
+	"github.com/msaher/idem/share"
 )
 
 type Request struct {
 	Name string `json:"name,omitempty"`
 	Groups []string `json:"groups,omitempty"`
 	Append bool `json:"append"`
-	DryRun bool `json:"dry_run"`
 }
 
-type UserResult struct {
-	Changed bool `json:"changed"`
-	WouldChange bool `json:"would_change,omitempty"`
-	MissingGroups []string `json:"missing_groups,omitempty"`
-	Error string `json:"error,omitempty"`
-}
-
-func run() (res *UserResult, err error) {
-	res = &UserResult{}
-	var want Request
+func run() (res *share.UserResult, err error) {
+	dryRun := false
+	res = &share.UserResult{}
+	var want share.UserConfig
 	err = json.NewDecoder(os.Stdin).Decode(&want)
 	if err != nil {
 		return
@@ -34,7 +29,7 @@ func run() (res *UserResult, err error) {
 
 	// get current state
 	var found bool
-	u, err := user.Lookup(want.Name)
+	u, err := user.Lookup(want.F_name)
 	if _, ok := errors.AsType[user.UnknownUserError](err); ok {
 		found = false
 		err = nil
@@ -45,12 +40,12 @@ func run() (res *UserResult, err error) {
 	}
 
 	if !found {
-		if want.DryRun {
+		if dryRun {
 			res.WouldChange = true
 			return
 		}
 		var out []byte
-		out, err = exec.Command("adduser", "-D", want.Name).CombinedOutput()
+		out, err = exec.Command("adduser", "-D", want.F_name).CombinedOutput()
 		if err != nil {
 			err = fmt.Errorf("Failed to run adduser: %s", string(out))
 			return
@@ -64,7 +59,7 @@ func run() (res *UserResult, err error) {
 
 	// if not created, look up the user again
 	if u == nil {
-		u, err = user.Lookup(want.Name)
+		u, err = user.Lookup(want.F_name)
 		if err != nil {
 			panic(err)
 		}
@@ -76,7 +71,7 @@ func run() (res *UserResult, err error) {
 
 	var missingGroups []string
 	var group *user.Group
-	for _, g := range want.Groups {
+	for _, g := range want.F_groups {
 		group, err = user.LookupGroup(g)
 		if _, ok := errors.AsType[user.UnknownGroupError](err); ok {
 			missingGroups = append(missingGroups, g)
@@ -84,7 +79,7 @@ func run() (res *UserResult, err error) {
 		}
 
 		if slices.Index(userGroupIds, group.Gid) == -1 {
-			if want.DryRun {
+			if dryRun {
 				res.WouldChange = true
 				continue
 			}
@@ -99,8 +94,8 @@ func run() (res *UserResult, err error) {
 	}
 
 	if missingGroups != nil {
+		// no need to populate res.Error it was done above by exec.Command
 		res.MissingGroups = missingGroups
-		res.Error = "missing groups"
 	}
 
 	return
