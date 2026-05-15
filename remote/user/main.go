@@ -1,5 +1,6 @@
 package main
 
+// TODO: this is half baked. Still have some stuff left to do but you get the idea
 import (
 	"encoding/json"
 	"errors"
@@ -11,12 +12,6 @@ import (
 
 	"github.com/msaher/idem/share"
 )
-
-type Request struct {
-	Name string `json:"name,omitempty"`
-	Groups []string `json:"groups,omitempty"`
-	Append bool `json:"append"`
-}
 
 func run() (res *share.UserResult, err error) {
 	dryRun := false
