@@ -1,12 +1,13 @@
 package idem
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
-	"path/filepath"
-	"strings"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -17,11 +18,10 @@ type HostConfig struct {
 	User string
 	Sudo bool
 	Password string
+	DryRun bool
 }
 
 func (h *HostConfig) Dial(network string) (*ssh.Client, error) {
-	// get a client
-	// this should be its own function later
 	sshConfig := &ssh.ClientConfig {
 		User: h.User,
 		Auth: []ssh.AuthMethod {
@@ -61,38 +61,7 @@ func poorManScp(client *ssh.Client, r io.Reader, dstPath string) error {
 	return err
 }
 
-
-
-type UserState struct {
-	Name string
-	Exists bool
-	Groups []string
-}
-
-
-type UserConfig struct {
-	Name string
-	groups []string
-	append bool
-}
-
-func User(name string) *UserConfig {
-	return &UserConfig {
-		Name: name,
-	}
-}
-
-func (cfg *UserConfig) Append(v bool) *UserConfig {
-	cfg.append = true
-	return cfg
-}
-
-func (cfg *UserConfig) Groups(groups ...string) *UserConfig {
-	cfg.groups = groups
-	return cfg
-}
-
-
+// TODO: old binary once we run
 func runBin(h *HostConfig, stdin io.Reader, path string) ([]byte, error) {
 	client, err := h.Dial("tcp")
 	if err != nil {
@@ -135,7 +104,7 @@ func runBin(h *HostConfig, stdin io.Reader, path string) ([]byte, error) {
 	if h.Sudo {
 		cmd = "sudo " + dstPath
 	}
-	out, err := binSes.CombinedOutput(cmd)
+	out, err := binSes.Output(cmd)
 	if err != nil {
 		return out, err
 	}
@@ -143,8 +112,56 @@ func runBin(h *HostConfig, stdin io.Reader, path string) ([]byte, error) {
 	return out, err
 }
 
-func (u *UserConfig) Run(h *HostConfig) ([]byte, error) {
+type UserError struct {
+	MissingGroups []string `json:"missing_groups,omitempty"`
+	Msg string `json:"msg,omitempty"` // for other errors
+}
+
+func (ue *UserError) Error() string {
+	return fmt.Sprintf("%#v", ue)
+}
+
+type UserResult struct {
+	Changed bool `json:"changed"`
+	WouldChange bool `json:"would_change,omitempty"`
+	Uerror *UserError `json:"error,omitempty"`
+	err error
+}
+
+func (ur *UserResult) Err() error {
+	if ur.Uerror != nil {
+		return ur.Uerror
+	}
+	return ur.err
+}
+
+type UserConfig struct {
+	F_name string `json:"name"`
+	F_groups []string `json:"groups"`
+	F_append bool `json:"append"`
+	DryRun bool `json:"dry_run"`
+}
+
+func User(name string) *UserConfig {
+	return &UserConfig {
+		F_name: name,
+	}
+}
+
+func (cfg *UserConfig) Append(v bool) *UserConfig {
+	cfg.F_append = true
+	return cfg
+}
+
+func (cfg *UserConfig) Groups(groups ...string) *UserConfig {
+	cfg.F_groups = groups
+	return cfg
+}
+
+
+func (u *UserConfig) Run(h *HostConfig) (res *UserResult) {
 	// TODO: embed these source files and precompile them instead of compiling everytime
+	res = &UserResult{}
 	c := exec.Cmd{
 		Path: "/usr/bin/go",
 		Args: []string{"go", "build", "-o", "/tmp/idem_user", "./remote/user/"},
@@ -154,8 +171,30 @@ func (u *UserConfig) Run(h *HostConfig) ([]byte, error) {
 	}
 	err := c.Run()
 	if err != nil {
-		return nil, err
+		res.err = err
+		return
 	}
-	out, err := runBin(h, strings.NewReader(`{"name": "user123"}`), "/tmp/idem_user")
-	return out, err
+
+	jsn, err := json.MarshalIndent(u, "", "\t")
+	if err != nil {
+		res.err = err
+		return
+	}
+	out, err := runBin(h, bytes.NewReader(jsn), "/tmp/idem_user")
+	if err != nil {
+		res.err = err
+		return
+	}
+
+	// read output
+	r := bytes.NewReader(out)
+	dec := json.NewDecoder(r)
+	dec.DisallowUnknownFields()
+	err = dec.Decode(&res)
+	if err != nil {
+		res.err = err
+		return
+	}
+
+	return
 }

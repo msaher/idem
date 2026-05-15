@@ -1,21 +1,37 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
-	"errors"
 	"os/user"
-	"encoding/json"
 	"slices"
-	"fmt"
 )
 
 type Request struct {
 	Name string `json:"name,omitempty"`
 	Groups []string `json:"groups,omitempty"`
+	Append bool `json:"append"`
+	DryRun bool `json:"dry_run"`
 }
 
-func run() (changed bool, err error) {
+type UserError struct {
+	MissingGroups []string `json:"missing_groups,omitempty"`
+	Msg string `json:"msg,omitempty"` // for other errors
+}
+
+type UserResult struct {
+	Changed bool `json:"changed"`
+	WouldChange bool `json:"would_change,omitempty"`
+	Err *UserError `json:"error,omitempty"`
+	// Err error `json:"error"`
+}
+
+
+func run() (res *UserResult, err error) {
+	res = &UserResult{}
 	var want Request
 	err = json.NewDecoder(os.Stdin).Decode(&want)
 	if err != nil {
@@ -27,6 +43,7 @@ func run() (changed bool, err error) {
 	u, err := user.Lookup(want.Name)
 	if _, ok := errors.AsType[user.UnknownUserError](err); ok {
 		found = false
+		err = nil
 	} else if err != nil {
 		return
 	} else {
@@ -34,13 +51,17 @@ func run() (changed bool, err error) {
 	}
 
 	if !found {
+		if want.DryRun {
+			res.WouldChange = true
+			return
+		}
 		var out []byte
 		out, err = exec.Command("adduser", "-D", want.Name).CombinedOutput()
 		if err != nil {
-			fmt.Printf("%#v", string(out))
+			err = fmt.Errorf("Failed to run adduser: %s", string(out))
 			return
 		}
-		changed = true
+		res.Changed = true
 	}
 
 	// TODO: create home directory?
@@ -65,34 +86,37 @@ func run() (changed bool, err error) {
 		group, err = user.LookupGroup(g)
 		if _, ok := errors.AsType[user.UnknownGroupError](err); ok {
 			missingGroups = append(missingGroups, g)
+			continue
 		}
 
 		if slices.Index(userGroupIds, group.Gid) == -1 {
-			err = exec.Command("addgroup", u.Username, group.Name).Run()
+			if want.DryRun {
+				res.WouldChange = true
+				continue
+			}
+			var out []byte
+			out, err = exec.Command("addgroup", u.Username, group.Name).CombinedOutput()
 			if err != nil {
+				err = fmt.Errorf("Failed to run addgroup: %s", out)
 				return
 			}
-			changed = true
+			res.Changed = true
 		}
 	}
+
+	if missingGroups != nil {
+		res.Err = &UserError{MissingGroups: missingGroups}
+	}
+
 	return
 }
 
 func main() {
-	changed, err := run()
-	var code int
-	var errMsg string
+	res, err := run()
 	if err != nil {
-		code = 1
-		errMsg = err.Error()
-	}
-
-	res := struct {
-		Changed bool `json:"changed"`
-		Error string `json:"error,omitempty"`
-	} {
-		Changed: changed,
-		Error: errMsg,
+		if res.Err == nil {
+			res.Err = &UserError{Msg: err.Error()}
+		}
 	}
 
 	b, err := json.MarshalIndent(res, "", "\t")
@@ -102,5 +126,4 @@ func main() {
 	b = append(b, '\n')
 
 	os.Stdout.Write(b)
-	os.Exit(code)
 }
