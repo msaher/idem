@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -61,6 +62,20 @@ func poorManScp(client *ssh.Client, r io.Reader, dstPath string) error {
 	return err
 }
 
+type ExitErr struct {
+    *ssh.ExitError
+    CombinedOutput string
+}
+
+func (e *ExitErr) Error() string {
+    return fmt.Sprintf(
+        "ssh command failed (exit %d): %v\noutput:\n%s",
+        e.ExitError.ExitStatus(),
+        e.ExitError,
+        e.CombinedOutput,
+    )
+}
+
 func runBin(client *ssh.Client, stdin io.Reader, path string, sudo bool) ([]byte, error, bool) {
 	sent := false
 	file, err := os.Open(path)
@@ -100,13 +115,17 @@ func runBin(client *ssh.Client, stdin io.Reader, path string, sudo bool) ([]byte
 	if sudo {
 		cmd = "sudo " + dstPath
 	}
-	out, err := binSes.Output(cmd)
+	out, err := binSes.CombinedOutput(cmd)
 	if err != nil {
 		return out, err, sent
 	}
 
 	return out, err, sent
 }
+
+var (
+	MissingGroupsErr = errors.New("missing groups")
+)
 
 type UserError struct {
 	MissingGroups []string `json:"missing_groups,omitempty"`
@@ -120,15 +139,8 @@ func (ue *UserError) Error() string {
 type UserResult struct {
 	Changed bool `json:"changed"`
 	WouldChange bool `json:"would_change,omitempty"`
-	Uerror *UserError `json:"error,omitempty"`
-	err error
-}
-
-func (ur *UserResult) Err() error {
-	if ur.Uerror != nil {
-		return ur.Uerror
-	}
-	return ur.err
+	MissingGroups []string `json:"missing_groups,omitempty"`
+	Error string `json:"error,omitempty"`
 }
 
 type UserConfig struct {
@@ -155,9 +167,8 @@ func (cfg *UserConfig) Groups(groups ...string) *UserConfig {
 }
 
 
-func (u *UserConfig) Run(h *HostConfig) (res *UserResult) {
+func (u *UserConfig) Run(h *HostConfig) (res *UserResult, err error) {
 	// TODO: embed these source files and precompile them instead of compiling everytime
-	res = &UserResult{}
 	c := exec.Cmd{
 		Path: "/usr/bin/go",
 		Args: []string{"go", "build", "-o", "/tmp/idem_user", "./remote/user/"},
@@ -165,27 +176,26 @@ func (u *UserConfig) Run(h *HostConfig) (res *UserResult) {
 			"CGO_ENABLED=0",
 		),
 	}
-	err := c.Run()
+	err = c.Run()
 	if err != nil {
-		res.err = err
 		return
 	}
 
+	// prepare payload
 	jsn, err := json.MarshalIndent(u, "", "\t")
 	if err != nil {
-		res.err = err
 		return
 	}
 	// TODO: might want to reuse clients
 	client, err := h.Dial("tcp")
 	if err != nil {
-		return nil
+		return
 	}
 	defer client.Close()
 	var sent bool
 	out, err, sent := runBin(client, bytes.NewReader(jsn), "/tmp/idem_user", h.Sudo)
 
-	// remove binary
+	// remove binary if we sent it successfully
 	defer func() {
 		if sent {
 			ses, err := client.NewSession()
@@ -198,8 +208,11 @@ func (u *UserConfig) Run(h *HostConfig) (res *UserResult) {
 		}
 	}()
 
-	if err != nil {
-		res.err = err
+	// check if it ran successfully
+	if sshExitErr, ok := errors.AsType[*ssh.ExitError](err); ok {
+		err = &ExitErr{sshExitErr, string(out)}
+		return
+	} else if err != nil {
 		return
 	}
 
@@ -207,10 +220,16 @@ func (u *UserConfig) Run(h *HostConfig) (res *UserResult) {
 	r := bytes.NewReader(out)
 	dec := json.NewDecoder(r)
 	dec.DisallowUnknownFields()
+	// TODO: maybe show output if we can't decode? Means binary outputted something other than json.
 	err = dec.Decode(&res)
 	if err != nil {
-		res.err = err
 		return
+	}
+
+	if res.MissingGroups != nil {
+		err = MissingGroupsErr
+	} else if res.Error != "" {
+		err = errors.New(res.Error)
 	}
 
 	return

@@ -3,7 +3,6 @@ package idem_test
 import (
 	"testing"
 	"github.com/msaher/idem"
-	"encoding/json"
 )
 
 func TestUser(t *testing.T) {
@@ -16,12 +15,10 @@ func TestUser(t *testing.T) {
 	}
 	cfg := idem.User("user123").
 	Groups("wheel", "video", "bleh")
-	res := cfg.Run(h)
-
-	bleh, _ := json.Marshal(cfg)
-	t.Logf("%+v", string(bleh))
-	t.Logf("%+v", res)
-	if res != nil {
-		t.Logf("%#v", res.Err())
+	res, err := cfg.Run(h)
+	if err != nil {
+		t.Logf("%#v", err)
 	}
+
+	t.Logf("%+v", res)
 }

@@ -17,18 +17,12 @@ type Request struct {
 	DryRun bool `json:"dry_run"`
 }
 
-type UserError struct {
-	MissingGroups []string `json:"missing_groups,omitempty"`
-	Msg string `json:"msg,omitempty"` // for other errors
-}
-
 type UserResult struct {
 	Changed bool `json:"changed"`
 	WouldChange bool `json:"would_change,omitempty"`
-	Err *UserError `json:"error,omitempty"`
-	// Err error `json:"error"`
+	MissingGroups []string `json:"missing_groups,omitempty"`
+	Error string `json:"error,omitempty"`
 }
-
 
 func run() (res *UserResult, err error) {
 	res = &UserResult{}
@@ -105,7 +99,8 @@ func run() (res *UserResult, err error) {
 	}
 
 	if missingGroups != nil {
-		res.Err = &UserError{MissingGroups: missingGroups}
+		res.MissingGroups = missingGroups
+		res.Error = "missing groups"
 	}
 
 	return
@@ -113,10 +108,8 @@ func run() (res *UserResult, err error) {
 
 func main() {
 	res, err := run()
-	if err != nil {
-		if res.Err == nil {
-			res.Err = &UserError{Msg: err.Error()}
-		}
+	if err != nil && res.Error == "" {
+		res.Error = err.Error()
 	}
 
 	b, err := json.MarshalIndent(res, "", "\t")
