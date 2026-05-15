@@ -1,14 +1,20 @@
 package idem
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 
-	"golang.org/x/crypto/ssh"
+	"embed"
 
+	"golang.org/x/crypto/ssh"
 )
+
+//go:embed compile/bin/*
+var binaries embed.FS
 
 type HostConfig struct {
 	Host string
@@ -73,16 +79,14 @@ func (e *ExitErr) Error() string {
     )
 }
 
-func runBin(client *ssh.Client, stdin io.Reader, path string, sudo bool) ([]byte, error, bool) {
+func runBin(client *ssh.Client, stdin io.Reader, binName string, sudo bool) ([]byte, error, bool) {
 	sent := false
-	file, err := os.Open(path)
+	bin, err := binaries.ReadFile(filepath.Join("compile", "bin", binName))
 	if err != nil {
 		return nil, err, sent
 	}
-	defer file.Close()
-	base := filepath.Base(path)
-	dstPath := filepath.Join("/tmp", base)
-	err = poorManScp(client, file, dstPath)
+	dstPath := filepath.Join("/tmp", binName)
+	err = poorManScp(client, bytes.NewReader(bin), dstPath)
 	if err != nil {
 		return nil, err, sent
 	}
@@ -118,4 +122,55 @@ func runBin(client *ssh.Client, stdin io.Reader, path string, sudo bool) ([]byte
 	}
 
 	return out, err, sent
+}
+
+func run(h *HostConfig, req any, bin string, res any) error {
+	jsn, err := json.MarshalIndent(req, "", "\t")
+	if err != nil {
+		panic(err)
+	}
+
+	// TODO: might want to reuse clients
+	client, err := h.Dial("tcp")
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	out, err, sent := runBin(client, bytes.NewReader(jsn), bin, h.Sudo)
+
+	// remove binary if we sent it successfully
+	defer func() {
+		if sent {
+			ses, err := client.NewSession()
+			// give up. can't do it
+			if err != nil {
+				return
+			}
+			ses.Run(fmt.Sprintf("rm %s", bin))
+			ses.Close()
+		}
+	}()
+
+	// check if it ran successfully
+	if sshExitErr, ok := errors.AsType[*ssh.ExitError](err); ok {
+		err = &ExitErr{sshExitErr, string(out)}
+		return err
+	} else if err != nil {
+		return err
+	}
+
+	// read output
+	r := bytes.NewReader(out)
+	dec := json.NewDecoder(r)
+	dec.DisallowUnknownFields()
+	err = dec.Decode(res)
+	if err != nil {
+		// We can't decode? binary shows unexpected output. This is a bug
+		panic(map[string]any{
+			"bin": bin,
+			"output": string(out),
+		})
+	}
+
+	return nil
 }
