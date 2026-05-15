@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"os/exec"
+	"os"
 
 	"embed"
 
@@ -25,9 +27,11 @@ type HostCtx struct {
 	SshConfig *ssh.ClientConfig
 	Client *ssh.Client
 	Err error
+	local bool
 }
 
-func (h *HostCtx) dial(network string) (*ssh.Client, error) {
+var Local = &HostCtx{local: true}
+
 func (h *HostCtx) dial() (*ssh.Client, error) {
 	if h.Client != nil {
 		return h.Client, nil
@@ -73,15 +77,22 @@ func poorManScp(client *ssh.Client, r io.Reader, dstPath string) error {
 }
 
 type ExitErr struct {
-    *ssh.ExitError
+	SshErr *ssh.ExitError
+	ExecErr *exec.ExitError
     CombinedOutput string
+}
+
+func (e *ExitErr) ExitStatus() int {
+	if e.SshErr != nil {
+		e.SshErr.ExitStatus()
+	}
+	return e.ExecErr.ExitCode()
 }
 
 func (e *ExitErr) Error() string {
     return fmt.Sprintf(
-        "ssh command failed (exit %d): %v\noutput:\n%s",
-        e.ExitError.ExitStatus(),
-        e.ExitError,
+        "ssh command failed (exit %d): \noutput:\n%s",
+        e.ExitStatus(),
         e.CombinedOutput,
     )
 }
@@ -141,32 +152,60 @@ func run(h *HostCtx, req any, bin string, res any) error {
 		panic(err)
 	}
 
-
-	client, err := h.dial()
-	if err != nil {
-		return err
-	}
-	out, err, sent := runBin(client, bytes.NewReader(jsn), bin, h.Sudo)
-
-	// remove binary if we sent it successfully
-	defer func() {
-		if sent {
-			ses, err := client.NewSession()
-			// give up. can't do it
-			if err != nil {
-				return
-			}
-			ses.Run(fmt.Sprintf("rm %s", bin))
-			ses.Close()
+	var out []byte
+	if h.local {
+		b, err := binaries.ReadFile(filepath.Join("compile", "bin", bin))
+		if err != nil {
+			return nil
 		}
-	}()
+		pth := filepath.Join("/tmp", bin)
+		defer os.Remove(pth)
+		file, err := os.OpenFile(pth, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
+		if err != nil {
+			return err
+		}
+		_, err = file.Write(b)
+		file.Close()
+		if err != nil {
+			return err
+		}
 
-	// check if it ran successfully
-	if sshExitErr, ok := errors.AsType[*ssh.ExitError](err); ok {
-		err = &ExitErr{sshExitErr, string(out)}
-		return err
-	} else if err != nil {
-		return err
+		cmd := exec.Command(pth)
+		cmd.Stdin = bytes.NewReader(jsn)
+		out, err = cmd.CombinedOutput()
+
+		if execErr, ok := errors.AsType[*exec.ExitError](err); ok {
+			return &ExitErr{ExecErr: execErr, CombinedOutput: string(out)}
+		} else if err != nil {
+			return err
+		}
+	} else { // ssh
+		client, err := h.dial()
+		if err != nil {
+			return err
+		}
+		var sent bool
+		out, err, sent = runBin(client, bytes.NewReader(jsn), bin, h.Sudo)
+
+		// remove binary if we sent it successfully
+		defer func() {
+			if sent {
+				ses, err := client.NewSession()
+				// give up. can't do it
+				if err != nil {
+					return
+				}
+				ses.Run(fmt.Sprintf("rm %s", bin))
+				ses.Close()
+			}
+		}()
+
+		// check if it ran successfully
+		if sshExitErr, ok := errors.AsType[*ssh.ExitError](err); ok {
+			return &ExitErr{SshErr: sshExitErr, CombinedOutput: string(out)}
+		} else if err != nil {
+			return err
+		}
 	}
 
 	// read output
@@ -176,10 +215,7 @@ func run(h *HostCtx, req any, bin string, res any) error {
 	err = dec.Decode(res)
 	if err != nil {
 		// We can't decode? binary shows unexpected output. This is a bug
-		panic(map[string]any{
-			"bin": bin,
-			"output": string(out),
-		})
+		panic(fmt.Errorf("bin: %s. Output:\n%s", bin, string(out)))
 	}
 
 	return nil
