@@ -135,6 +135,7 @@ func runBin(client *ssh.Client, stdin io.Reader, binName string, sudo bool) ([]b
 		cmd = "sudo " + dstPath
 	}
 	out, err := binSes.CombinedOutput(cmd)
+
 	if err != nil {
 		return out, err, sent
 	}

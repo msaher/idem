@@ -1,8 +1,11 @@
 package idem_test
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -99,4 +102,144 @@ func TestUser(t *testing.T) {
             t.Fatal("expected error")
         }
     })
+}
+
+func TestFile(t *testing.T) {
+	t.Run("create a file", func(t *testing.T) {
+		pth := "/a/b/create_file"
+		res, err := idem.File(pth).Run(h)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		err = containerCommand("test", "-f", pth).Run()
+		if err != nil {
+			t.Fatalf("Expected path to be created: %v\n%v", err, res)
+		}
+	})
+
+	t.Run("remove a file", func(t *testing.T) {
+		pth := "/a/b/remove_file"
+		_, err := idem.File(pth).State("file").Run(h)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		_, err = idem.File(pth).State("absent").Run(h)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		err = containerCommand("test", "-f", pth).Run()
+		exitErr, ok := errors.AsType[*exec.ExitError](err)
+		if !ok {
+			t.Fatalf("cant run containerCommand: %v", err)
+		}
+		if exitErr.ExitCode() == 0 {
+			t.Fatalf("file still exists in continer")
+		}
+	})
+
+	t.Run("remove a directory", func(t *testing.T) {
+		pth := "/a/b/remove_directory"
+		_, err := idem.File(pth).State("directory").Run(h)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		_, err = idem.File(pth).State("absent").Run(h)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		err = containerCommand("test", "-d", pth).Run()
+		exitErr, ok := errors.AsType[*exec.ExitError](err)
+		if !ok {
+			t.Fatalf("cant run containerCommand: %v", err)
+		}
+		if exitErr.ExitCode() == 0 {
+			t.Fatalf("directory still exists in continer")
+		}
+	})
+
+	t.Run("file becomes a directory", func(t *testing.T) {
+		pth := "/a/b/become_dir"
+		_, err := idem.File(pth).State("file").Run(h)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		_, err = idem.File(pth).State("directory").Run(h)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+
+		err = containerCommand("test", "-d", pth).Run()
+		if err != nil {
+			t.Fatalf("expected directory to exist: %v", err)
+		}
+	})
+
+	t.Run("directory becomes a file", func(t *testing.T) {
+		pth := "/a/b/become_file"
+		_, err := idem.File(pth).State("directory").Run(h)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		_, err = idem.File(pth).State("file").Run(h)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+
+		err = containerCommand("test", "-f", pth).Run()
+		if err != nil {
+			t.Fatalf("expected file to exist: %v", err)
+		}
+	})
+
+	t.Run("set owner", func(t *testing.T) {
+		owner := "myuser"
+		pth := "a/b/set_owner"
+		res, err := idem.File(pth).Run(h)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if res.Owner == owner {
+			t.Fatalf("expected owner other than %q. Is host context correct?", owner)
+		}
+
+		res, err = idem.File(pth).Owner(owner).Run(h)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if res.Owner != owner {
+			t.Fatalf("expected owner to be %q", owner)
+		}
+	})
+
+	t.Run("set permissions", func(t *testing.T) {
+		pth := "/a/b/set_perm"
+		res, err := idem.File(pth).Mode(fs.FileMode(0755)).Run(h)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		err = containerCommand("test", "-f", pth).Run()
+		if err != nil {
+			t.Fatalf("Expected path to be created: %v\n%v", err, res)
+		}
+
+		res, err = idem.File(pth).Mode(fs.FileMode(0777)).Run(h)
+		if err != nil {
+			t.Fatalf("Expected path to be created: %v\n%v", err, res)
+		}
+
+		out, err := containerCommand("stat", "-c", "%a", pth).Output()
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		out = out[:len(out)-1] // trim newline
+		perm, err := strconv.ParseInt(string(out), 8, 0)
+		if err != nil {
+			t.Fatalf("Unexpected stat output: %v", string(out))
+		}
+
+		if perm != 0777 {
+			t.Fatalf("Unexpected permission: %o", perm)
+		}
+
+	})
 }
