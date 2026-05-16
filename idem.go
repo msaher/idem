@@ -146,6 +146,10 @@ func run(h *HostCtx, req any, bin string, res any) error {
 	if h.Err != nil {
 		return NoOp
 	}
+	var err error
+	defer func() {
+		h.Err = err
+	}()
 
 	jsn, err := json.MarshalIndent(req, "", "\t")
 	if err != nil {
@@ -154,7 +158,8 @@ func run(h *HostCtx, req any, bin string, res any) error {
 
 	var out []byte
 	if h.local {
-		b, err := binaries.ReadFile(filepath.Join("compile", "bin", bin))
+		var b []byte
+		b, err = binaries.ReadFile(filepath.Join("compile", "bin", bin))
 		if err != nil {
 			return nil
 		}
@@ -180,10 +185,12 @@ func run(h *HostCtx, req any, bin string, res any) error {
 			return err
 		}
 	} else { // ssh
-		client, err := h.dial()
+		var client *ssh.Client
+		client, err = h.dial()
 		if err != nil {
 			return err
 		}
+		// TODO: this is a bit silly. runBin should be responsible for deleting
 		var sent bool
 		out, err, sent = runBin(client, bytes.NewReader(jsn), bin, h.Sudo)
 
