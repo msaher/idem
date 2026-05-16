@@ -193,11 +193,17 @@ func TestFile(t *testing.T) {
 
 	t.Run("set owner", func(t *testing.T) {
 		owner := "myuser"
-		pth := "a/b/set_owner"
+		pth := "/a/b/set_owner"
 		res, err := idem.File(pth).Run(h)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
+
+		err = containerCommand("test", "-f", pth).Run()
+		if err != nil {
+			t.Fatalf("expected file to exist: %v", err)
+		}
+
 		if res.Owner == owner {
 			t.Fatalf("expected owner other than %q. Is host context correct?", owner)
 		}
@@ -240,6 +246,13 @@ func TestFile(t *testing.T) {
 		if perm != 0777 {
 			t.Fatalf("Unexpected permission: %o", perm)
 		}
+	})
 
+	t.Run("no relative paths", func(t *testing.T) {
+		pth := "a/b/c" // bad: must start with root
+		_, err := idem.File(pth).Run(h)
+		if err == nil {
+			t.Fatalf("expected an error because of a bad path")
+		}
 	})
 }

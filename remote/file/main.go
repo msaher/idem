@@ -37,15 +37,12 @@ func currentState(path string, res *share.FileResult) error {
 	// check owner
 	// NOTE: not portable in non-unix
 	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok {
-		// not Unix or unsupported
+	if ok {
+		// uid := stat.Uid
+		// gid := stat.Gid
+		u, _ := user.LookupId(strconv.Itoa(int(stat.Uid)))
+		res.Owner = u.Username
 	}
-
-	uid := stat.Uid
-	// gid := stat.Gid
-
-	u, _ := user.LookupId(strconv.Itoa(int(uid)))
-	res.Owner = u.Username
 
 	return nil
 }

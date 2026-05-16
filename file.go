@@ -2,12 +2,15 @@ package idem
 
 import (
 	"io/fs"
+	"errors"
 
 	"github.com/msaher/idem/share"
 )
 
 type FileConfig share.FileConfig
 type FileResult share.FileResult
+
+var BadPathErr = errors.New("path must start with '/' character")
 
 func File(path string) *FileConfig {
 	return &FileConfig{
@@ -33,6 +36,11 @@ func (fc *FileConfig) State(s string) *FileConfig {
 }
 
 func (fc *FileConfig) Run(h *HostCtx) (*FileResult, error) {
+	if fc.F_path[0] != '/' {
+		h.Err = BadPathErr
+		return nil, h.Err
+	}
+
 	var res FileResult
 	err := run(h, fc, "idem_file", &res)
 	if err != nil {
