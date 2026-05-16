@@ -39,5 +39,9 @@ func (u *UserConfig) Run(h *HostCtx) (*UserResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &res, nil
+
+	if res.MissingGroups != nil {
+		err = MissingGroupsErr
+	}
+	return &res, err
 }
