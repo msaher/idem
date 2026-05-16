@@ -14,6 +14,7 @@ func Package(name string) *PackageConfig {
 
 func (pc *PackageConfig) Manager(manager string) *PackageConfig {
 	pc.F_manager = manager
+	pc.F_state = "present"
 	return pc
 }
 
