@@ -118,16 +118,6 @@ func run(req *share.FileConfig, res *share.FileResult) error {
 	return nil
 }
 
-func write(res *share.FileResult) {
-	b, err := json.MarshalIndent(res, "", "\t")
-	if err != nil {
-		panic(err)
-	}
-	b = append(b, '\n')
-
-	os.Stdout.Write(b)
-}
-
 func main() {
 	var req share.FileConfig
 	err := json.NewDecoder(os.Stdin).Decode(&req)
@@ -141,7 +131,7 @@ func main() {
 	err = currentState(req.F_path, &before)
 	if err != nil {
 		before.Error = err.Error()
-		write(&before)
+		share.Write(&before)
 		return
 	}
 
@@ -157,5 +147,5 @@ func main() {
 		after.Changed = true
 	}
 
-	write(&after)
+	share.Write(&after)
 }

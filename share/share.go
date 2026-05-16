@@ -1,6 +1,8 @@
 package share
 
 import (
+	"encoding/json"
+	"os"
 	"io/fs"
 )
 
@@ -45,3 +47,13 @@ type PackageResult struct {
 	Changed bool `json:"changed"`
 	Error string `json:"error,omitempty"`
 }
+func Write(res any) {
+	b, err := json.MarshalIndent(res, "", "\t")
+	if err != nil {
+		panic(err)
+	}
+	b = append(b, '\n')
+
+	os.Stdout.Write(b)
+}
+

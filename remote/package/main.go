@@ -30,9 +30,9 @@ func resolvePackageManager(req *share.PackageConfig) (string, error) {
 		// get right os
 		var osName string
 		b, _ := os.ReadFile("/etc/os-release")
-		for _, line := range strings.Split(string(b), "\n") {
-			if strings.HasPrefix(line, "ID=") {
-				osName = strings.Trim(strings.TrimPrefix(line, "ID="), `"`)
+		for line := range strings.SplitSeq(string(b), "\n") {
+			if after, ok := strings.CutPrefix(line, "ID="); ok  {
+				osName = strings.Trim(after, `"`)
 				break
 			}
 		}
