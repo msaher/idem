@@ -71,7 +71,7 @@ func run(req *share.FileConfig, res *share.FileResult) error {
 			if err != nil {
 				return err
 			}
-			f, err := os.OpenFile(req.F_path, os.O_CREATE, os.FileMode(req.F_mode))
+			f, err := os.OpenFile(req.F_path, os.O_CREATE, os.FileMode(mode))
 			if err != nil {
 				return err
 			}
