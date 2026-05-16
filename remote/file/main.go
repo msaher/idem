@@ -94,7 +94,7 @@ func run(req *share.FileConfig, res *share.FileResult) error {
 	}
 
 	// nothing to do
-	if req.F_path == "absent" {
+	if req.F_state == "absent" {
 		return nil
 	}
 
