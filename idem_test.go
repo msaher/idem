@@ -259,13 +259,9 @@ func TestFile(t *testing.T) {
 
 func TestPackage(t *testing.T) {
 	t.Run("installs a package", func(t *testing.T) {
-		res, err := idem.Package("curl").State("present").Run(h)
+		_, err := idem.Package("curl").State("present").Run(h)
 		if err != nil {
-			var msg string
-			if res != nil {
-				msg = res.Error
-			}
-			t.Fatalf("%v\n%s", err, msg)
+			t.Fatalf("%v", err)
 		}
 	})
 

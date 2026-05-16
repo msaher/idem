@@ -8,8 +8,6 @@ import (
 type PackageConfig share.PackageConfig
 type PackageResult share.PackageResult
 
-var PackageErr = errors.New("package error")
-
 func Package(name string) *PackageConfig {
 	return &PackageConfig{F_name: name}
 }
@@ -31,7 +29,7 @@ func (pc *PackageConfig) Run(h *HostCtx) (*PackageResult, error) {
 		return nil, err
 	}
 	if res.Error != "" {
-		return &res, PackageErr
+		return &res, errors.New(res.Error)
 	}
 	return &res, nil
 }
