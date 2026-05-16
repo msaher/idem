@@ -1,13 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
-	"encoding/json"
-	"strconv"
 	"os/user"
-	"syscall"
 	"path/filepath"
+	"strconv"
+	"syscall"
 
 	"github.com/msaher/idem/share"
 )
@@ -51,7 +51,6 @@ func currentState(path string, res *share.FileResult) error {
 }
 
 func run(req *share.FileConfig, res *share.FileResult) error {
-
 	if res.State != req.F_state {
 		if req.F_state != "absent" {
 			err := os.RemoveAll(req.F_path)
@@ -62,26 +61,24 @@ func run(req *share.FileConfig, res *share.FileResult) error {
 
 		switch req.F_state {
 		case "file":
-			mode := req.F_mode
-			if mode == 0 {
-				mode = 0644
+			if req.F_mode == 0 {
+				req.F_mode = 0644
 			}
 			parents := filepath.Dir(req.F_path)
 			err := os.MkdirAll(parents, 0755)
 			if err != nil {
 				return err
 			}
-			f, err := os.OpenFile(req.F_path, os.O_CREATE, os.FileMode(mode))
+			f, err := os.OpenFile(req.F_path, os.O_CREATE, os.FileMode(req.F_mode))
 			if err != nil {
 				return err
 			}
 			f.Close()
 		case "directory":
-			mode := req.F_mode
-			if mode == 0 {
-				mode = 0755
+			if req.F_mode == 0 {
+				req.F_mode = 0755
 			}
-			err := os.MkdirAll(req.F_path, os.FileMode(mode))
+			err := os.MkdirAll(req.F_path, os.FileMode(req.F_mode))
 			if err != nil {
 				return err
 			}
@@ -117,7 +114,6 @@ func run(req *share.FileConfig, res *share.FileResult) error {
 		}
 	}
 
-	// set mode
 	if err := os.Chmod(req.F_path, req.F_mode); err != nil {
 		return err
 	}
