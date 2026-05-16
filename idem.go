@@ -84,7 +84,7 @@ type ExitErr struct {
 
 func (e *ExitErr) ExitStatus() int {
 	if e.SshErr != nil {
-		e.SshErr.ExitStatus()
+		return e.SshErr.ExitStatus()
 	}
 	return e.ExecErr.ExitCode()
 }
