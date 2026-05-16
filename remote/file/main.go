@@ -111,9 +111,10 @@ func run(req *share.FileConfig, res *share.FileResult) error {
 			panic(err) // unreachanble. uid has to be int
 		}
 		uid = uidInt
-	}
-	if err := os.Chown(req.F_path, uid, gid); err != nil {
-		return err
+
+		if err := os.Chown(req.F_path, uid, gid); err != nil {
+			return err
+		}
 	}
 
 	// set mode
