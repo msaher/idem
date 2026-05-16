@@ -29,7 +29,9 @@ func (pc *PackageConfig) Run(h *HostCtx) (*PackageResult, error) {
 		return nil, err
 	}
 	if res.Error != "" {
-		return &res, errors.New(res.Error)
+		err = errors.New(res.Error)
+		h.Err = err
+		return &res, h.Err
 	}
 	return &res, nil
 }
