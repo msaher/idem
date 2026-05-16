@@ -272,3 +272,60 @@ func TestPackage(t *testing.T) {
 		}
 	})
 }
+
+func TestCmd(t *testing.T) {
+	t.Run("runs a command", func(t *testing.T) {
+		res, err := idem.Command("ls", "-la").Run(h)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if res.Stdout == "" {
+			t.Fatalf("Expected some stdout")
+		}
+	})
+
+	t.Run("idempotent with creates", func(t *testing.T) {
+		somefile := "somefile"
+		tsk := idem.Command("touch", "somefile").Creates(somefile)
+		res, err := tsk.Run(h)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+
+		if !res.Changed {
+			t.Fatalf("expected change to be true")
+		}
+
+		res, err = tsk.Run(h)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+
+		if res.Changed {
+			t.Fatalf("expected change to be false")
+		}
+	})
+
+	t.Run("idempotent with removes", func(t *testing.T) {
+		deleteme := "deleteme"
+		res, err := idem.Command("touch", deleteme).Run(h)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+
+		if !res.Changed {
+			t.Fatalf("expected change to be true")
+		}
+
+		tsk := idem.Command("rm", deleteme).Removes(deleteme)
+		res, err = tsk.Run(h)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+
+		res, err = tsk.Run(h)
+		if res.Changed {
+			t.Fatalf("expected change to be false")
+		}
+	})
+}

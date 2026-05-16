@@ -47,6 +47,22 @@ type PackageResult struct {
 	Changed bool `json:"changed"`
 	Error string `json:"error,omitempty"`
 }
+
+type CmdConfig struct {
+    F_argv    []string `json:"argv"`
+    F_creates string `json:"creates,omitempty"` // skip if exists
+    F_removes string `json:"removes,omitempty"` // skip if absent
+}
+
+type CmdResult struct {
+    Changed  bool   `json:"changed"`
+    Stdout   string `json:"stdout"`
+    Stderr   string `json:"stderr"`
+    ExitCode int    `json:"exit_code"`
+    Error    string `json:"error,omitempty"`
+}
+
+
 func Write(res any) {
 	b, err := json.MarshalIndent(res, "", "\t")
 	if err != nil {
