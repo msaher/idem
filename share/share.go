@@ -33,3 +33,15 @@ type FileResult struct {
 	Owner string `json:"owner"`
 	Error string `json:"error,omitempty"`
 }
+
+type PackageConfig struct {
+	F_name string `json:"name"`
+	F_manager string `json:"manager"`
+	F_state string `json:"state"`
+}
+
+type PackageResult struct {
+	State string `json:"state"`
+	Changed bool `json:"changed"`
+	Error string `json:"error,omitempty"`
+}
