@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os"
 	"slices"
+	"sync"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -305,4 +306,15 @@ func (h *HostCtx) WithPort(p int) *HostCtx {
 func (h *HostCtx) WithSudo(s bool) *HostCtx {
 	h.Sudo = s
 	return h
+}
+
+func ForEach(hs []*HostCtx, f func(h *HostCtx)) {
+	var wg sync.WaitGroup
+	for _, h := range hs {
+		wg.Go(func() {
+			f(h)
+		})
+	}
+
+	wg.Wait()
 }
