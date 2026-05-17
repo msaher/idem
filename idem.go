@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"embed"
 	"fmt"
 	"io"
 	"path/filepath"
 	"os/exec"
 	"os"
-
-	"embed"
+	"slices"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -36,6 +36,7 @@ type HostCtx struct {
 	Err error
 	Logs []*Log
 	local bool
+	cachedBinaries []string
 }
 
 var Local = &HostCtx{local: true}
@@ -53,11 +54,31 @@ func (h *HostCtx) dial() (*ssh.Client, error) {
 	return client, err
 }
 
-// TODO: h.Done(). Closes connection. Removes binaries
-func (h *HostCtx) Close() error {
-	if h.Client != nil {
-		return h.Client.Close()
+func (h *HostCtx) Done() error {
+	if h.local {
+		for _, b := range h.cachedBinaries {
+			os.Remove(filepath.Join("/tmp", b))
+		}
+		h.cachedBinaries = nil
+		return nil
 	}
+
+	client, err := h.dial()
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	ses, err := client.NewSession()
+	if err != nil {
+		return err
+	}
+	defer ses.Close()
+
+	err = ses.Run("rm /tmp/idem_*")
+	if err != nil {
+		return err
+	}
+	h.cachedBinaries = nil
 	return nil
 }
 
@@ -111,50 +132,57 @@ func (e *ExitErr) Error() string {
     )
 }
 
-func runBin(client *ssh.Client, stdin io.Reader, binName string, sudo bool) ([]byte, error, bool) {
-	sent := false
-	bin, err := binaries.ReadFile(filepath.Join("compile", "bin", binName))
+func runBin(h *HostCtx, stdin io.Reader, binName string) ([]byte, error) {
+	client, err := h.dial()
 	if err != nil {
-		return nil, err, sent
+		return nil, err
 	}
+
 	dstPath := filepath.Join("/tmp", binName)
-	err = poorManScp(client, bytes.NewReader(bin), dstPath)
-	if err != nil {
-		return nil, err, sent
-	}
-	sent = true
+	if !slices.Contains(h.cachedBinaries, binName) { // haven't pushed this before
+		bin, err := binaries.ReadFile(filepath.Join("compile", "bin", binName))
+		if err != nil {
+			return nil, err
+		}
+		err = poorManScp(client, bytes.NewReader(bin), dstPath)
+		if err != nil {
+			return nil, err
+		}
 
-	ses, err := client.NewSession()
-	if err != nil {
-		return nil, err, sent
-	}
-	defer ses.Close()
+		ses, err := client.NewSession()
+		if err != nil {
+			return nil, err
+		}
+		defer ses.Close()
 
-	// NOTE: better not put dumb dstPath
-	err = ses.Run(fmt.Sprintf("chmod +x %s", dstPath))
-	if err != nil {
-		return nil, err, sent
+		// NOTE: better not put dumb dstPath
+		err = ses.Run(fmt.Sprintf("chmod +x %s", dstPath))
+		if err != nil {
+			return nil, err
+		}
+
+		h.cachedBinaries = append(h.cachedBinaries, binName)
 	}
 
 	// now we have the binary. Lets run it
 	binSes, err := client.NewSession()
 	if err != nil {
-		return nil, err, sent
+		return nil, err
 	}
 	defer binSes.Close()
 
 	binSes.Stdin = stdin
 	cmd := dstPath
-	if sudo {
+	if h.Sudo {
 		cmd = "sudo " + dstPath
 	}
 	out, err := binSes.CombinedOutput(cmd)
 
 	if err != nil {
-		return out, err, sent
+		return out, err
 	}
 
-	return out, err, sent
+	return out, err
 }
 
 func run(h *HostCtx, req any, name string, bin string, res any, changed *bool) error {
@@ -179,22 +207,25 @@ func run(h *HostCtx, req any, name string, bin string, res any, changed *bool) e
 
 	var out []byte
 	if h.local {
-		var b []byte
-		b, err = binaries.ReadFile(filepath.Join("compile", "bin", bin))
-		if err != nil {
-			return err
-		}
 		pth := filepath.Join("/tmp", bin)
-		defer os.Remove(pth)
-		file, err := os.OpenFile(pth, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
-		if err != nil {
-			return err
+		if !slices.Contains(h.cachedBinaries, bin) {
+			var b []byte
+			b, err = binaries.ReadFile(filepath.Join("compile", "bin", bin))
+			if err != nil {
+				return err
+			}
+			file, err := os.OpenFile(pth, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
+			if err != nil {
+				return err
+			}
+			_, err = file.Write(b)
+			if err != nil {
+				return err
+			}
+			file.Close()
+			h.cachedBinaries = append(h.cachedBinaries, bin)
 		}
-		_, err = file.Write(b)
-		file.Close()
-		if err != nil {
-			return err
-		}
+
 
 		cmd := exec.Command(pth)
 		cmd.Stdin = bytes.NewReader(jsn)
@@ -206,28 +237,7 @@ func run(h *HostCtx, req any, name string, bin string, res any, changed *bool) e
 			return err
 		}
 	} else { // ssh
-		var client *ssh.Client
-		client, err = h.dial()
-		if err != nil {
-			return err
-		}
-		// TODO: this is a bit silly. runBin should be responsible for deleting
-		var sent bool
-		out, err, sent = runBin(client, bytes.NewReader(jsn), bin, h.Sudo)
-
-		// remove binary if we sent it successfully
-		defer func() {
-			if sent {
-				ses, err := client.NewSession()
-				// give up. can't do it
-				if err != nil {
-					return
-				}
-				ses.Run(fmt.Sprintf("rm %s", bin))
-				ses.Close()
-			}
-		}()
-
+		out, err = runBin(h, bytes.NewReader(jsn), bin)
 		// check if it ran successfully
 		if sshExitErr, ok := errors.AsType[*ssh.ExitError](err); ok {
 			return &ExitErr{SshErr: sshExitErr, CombinedOutput: string(out)}
