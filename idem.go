@@ -244,6 +244,22 @@ func run(h *HostCtx, req any, name string, bin string, res any, changed *bool) e
 	return nil
 }
 
+func (h *HostCtx) PrintSummary() {
+    for _, l := range h.Logs {
+        status := "ok"
+        if l.Changed {
+            status = "changed"
+        }
+        if l.Err != nil {
+            status = "failed"
+        }
+        fmt.Printf("[%s] %s\n", status, l.Name)
+        if l.Err != nil {
+            fmt.Printf("  error: %v\n", l.Err)
+        }
+    }
+}
+
 // Since structured errors are propogated only through the remote binary the
 // result types are the only means of communication and thus must include
 // everything including what went wrong. Since go is a language that expects two
