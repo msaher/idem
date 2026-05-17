@@ -48,7 +48,7 @@ func main() {
 	err := cmd.Run()
 	res.Changed = true
 	res.Stdout = stdout.String()
-	res.Stderr = stdout.String()
+	res.Stderr = stderr.String()
 
 	if err != nil {
 		res.Error = err.Error()
