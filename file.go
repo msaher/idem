@@ -36,15 +36,24 @@ func (fc *FileConfig) State(s string) *FileConfig {
 }
 
 func (fc *FileConfig) Run(h *HostCtx) (*FileResult, error) {
+	l := &Log{Name: "file"}
 	if fc.F_path[0] != '/' {
-		h.Err = BadPathErr
-		return nil, h.Err
+		err := BadPathErr
+		h.Err = err
+		l.Err = err
+		h.Logs = append(h.Logs, l)
+		return nil, err
 	}
 
 	var res FileResult
 	err := run(h, fc, "idem_file", &res)
-	if err != nil {
+	if err == NoOp {
 		return nil, err
 	}
-	return &res, nil
+
+	l.Changed = res.Changed
+	l.Err = err
+	l.Result = &res
+	h.Logs = append(h.Logs, l)
+	return &res, err
 }

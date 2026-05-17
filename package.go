@@ -26,13 +26,24 @@ func (pc *PackageConfig) State(state string) *PackageConfig {
 func (pc *PackageConfig) Run(h *HostCtx) (*PackageResult, error) {
 	var res PackageResult
 	err := run(h, pc, "idem_package", &res)
+	if err == NoOp {
+		return nil, err
+	}
+
+	l := &Log {Name: "package"}
 	if err != nil {
+		l.Err = err
+		h.Logs = append(h.Logs, l)
 		return nil, err
 	}
 	if res.Error != "" {
 		err = errors.New(res.Error)
+		l.Err = err
 		h.Err = err
-		return &res, h.Err
 	}
-	return &res, nil
+	l.Changed = res.Changed
+	l.Result = &res
+	h.Logs = append(h.Logs, l)
+
+	return &res, h.Err
 }

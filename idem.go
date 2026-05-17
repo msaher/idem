@@ -18,6 +18,13 @@ import (
 //go:embed compile/bin/*
 var binaries embed.FS
 
+type Log struct {
+	Name string
+	Changed bool
+	Err error
+	Result any
+}
+
 var NoOp = errors.New("Host Context has its error set. No action was taken")
 
 type HostCtx struct {
@@ -27,6 +34,7 @@ type HostCtx struct {
 	SshConfig *ssh.ClientConfig
 	Client *ssh.Client
 	Err error
+	Logs []*Log
 	local bool
 }
 
@@ -45,6 +53,7 @@ func (h *HostCtx) dial() (*ssh.Client, error) {
 	return client, err
 }
 
+// TODO: h.Done(). Closes connection. Removes binaries
 func (h *HostCtx) Close() error {
 	if h.Client != nil {
 		return h.Client.Close()
@@ -228,3 +237,11 @@ func run(h *HostCtx, req any, bin string, res any) error {
 
 	return nil
 }
+
+// Since structured errors are propogated only through the remote binary the
+// result types are the only means of communication and thus must include
+// everything including what went wrong. Since go is a language that expects two
+// errors values we return a second error value thats identical to the result type
+// but since it will be consuing of Results.Err() was a thing and results were
+// compatible with error interface we create a wrapper type... that's essentially
+// an alias with an Err method that pretty prints.

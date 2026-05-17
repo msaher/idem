@@ -36,12 +36,22 @@ func (cfg *UserConfig) Groups(groups ...string) *UserConfig {
 func (u *UserConfig) Run(h *HostCtx) (*UserResult, error) {
 	var res UserResult
 	err := run(h, u, "idem_user", &res)
+	if err == NoOp {
+		return nil, err
+	}
+
+	l := &Log {Name :"user"}
 	if err != nil {
+		l.Err = err
+		h.Logs = append(h.Logs, l)
 		return nil, err
 	}
 
 	if res.MissingGroups != nil {
 		err = MissingGroupsErr
 	}
+
+	l.Err = err
+	h.Logs = append(h.Logs, l)
 	return &res, err
 }
