@@ -152,13 +152,19 @@ func runBin(client *ssh.Client, stdin io.Reader, binName string, sudo bool) ([]b
 	return out, err, sent
 }
 
-func run(h *HostCtx, req any, bin string, res any) error {
+func run(h *HostCtx, req any, name string, bin string, res any, changed *bool) error {
 	if h.Err != nil {
 		return NoOp
 	}
 	var err error
 	defer func() {
 		h.Err = err
+		l := &Log{Name: name, Err: err}
+		if err == nil {
+			l.Result = res
+			l.Changed = *changed
+		}
+		h.Logs = append(h.Logs, l)
 	}()
 
 	jsn, err := json.MarshalIndent(req, "", "\t")
