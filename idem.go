@@ -19,10 +19,10 @@ import (
 var binaries embed.FS
 
 type Log struct {
-	Name string
-	Changed bool
-	Err error
-	Result any
+	Name string `json:"name"`
+	Changed bool `json:"changed"`
+	Err error `json:"err,omitempty"`
+	Result any `json:"result"`
 }
 
 var NoOp = errors.New("Host Context has its error set. No action was taken")
