@@ -99,8 +99,13 @@ func (e *ExitErr) ExitStatus() int {
 }
 
 func (e *ExitErr) Error() string {
+	var prefix string
+	if e.SshErr != nil {
+		prefix = "ssh "
+	}
     return fmt.Sprintf(
-        "ssh command failed (exit %d): \noutput:\n%s",
+        "%scommand failed (exit %d): \noutput:\n%s",
+		prefix,
         e.ExitStatus(),
         e.CombinedOutput,
     )
