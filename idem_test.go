@@ -64,7 +64,6 @@ var h = &idem.HostCtx {
 func TestUser(t *testing.T) {
     t.Run("create user", func(t *testing.T) {
         cfg := idem.User("testuser").Groups("wheel")
-
         _, err := cfg.Run(h)
         if err != nil {
             t.Fatalf("%v", err)
@@ -101,7 +100,37 @@ func TestUser(t *testing.T) {
         if err == nil {
             t.Fatal("expected error")
         }
+		h.Err = nil // for next test
     })
+
+	t.Run("remove a user", func(t *testing.T) {
+		u := "removeme"
+		_, err := idem.User(u).State("present").Run(h)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+
+		err = containerCommand("id", u).Run()
+		if err != nil {
+			t.Fatalf("Expected user to be created: %v", err)
+		}
+
+		res, err := idem.User(u).State("absent").Run(h)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		if res.State != "absent" {
+			t.Fatalf("Expected user to be absent")
+		}
+		err = containerCommand("id", u).Run()
+		if err == nil {
+			t.Fatalf("Expected user to be absent. Result is lying!")
+		}
+		_, ok := errors.AsType[*exec.ExitError](err)
+		if !ok {
+			t.Fatalf("cant run containerCommand: %v", err)
+		}
+	})
 }
 
 func TestFile(t *testing.T) {
