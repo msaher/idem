@@ -19,7 +19,14 @@ type UserConfig share.UserConfig
 func User(name string) *UserConfig {
 	return &UserConfig {
 		F_name: name,
+		F_state: "present",
 	}
+}
+
+// TODO: what to do with invalid states
+func (cfg *UserConfig) State(s string) *UserConfig {
+	cfg.F_state = s
+	return cfg
 }
 
 func (cfg *UserConfig) Append(v bool) *UserConfig {
@@ -44,8 +51,8 @@ func (u *UserConfig) Run(h *HostCtx) (*UserResult, error) {
 		return nil, err
 	}
 
-	if res.MissingGroups != nil {
-		err = MissingGroupsErr
+	if res.Error != "" {
+		err = errors.New(res.Error)
 		h.Logs[len(h.Logs)-1].Err = err
 		h.Err = err
 	}

@@ -7,6 +7,8 @@ import (
 )
 
 type UserResult struct {
+	State string `json:"state"` // present, absent
+	Groups []string `json:"groups"`
 	Changed bool `json:"changed"`
 	WouldChange bool `json:"would_change,omitempty"`
 	MissingGroups []string `json:"missing_groups,omitempty"`
@@ -14,6 +16,7 @@ type UserResult struct {
 }
 
 type UserConfig struct {
+	F_state string `json:"state"`
 	F_name string `json:"name"`
 	F_groups []string `json:"groups"`
 	F_append bool `json:"append"`

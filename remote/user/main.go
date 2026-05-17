@@ -13,100 +13,113 @@ import (
 	"github.com/msaher/idem/share"
 )
 
-func run() (res *share.UserResult, err error) {
-	dryRun := false
-	res = &share.UserResult{}
-	var want share.UserConfig
-	err = json.NewDecoder(os.Stdin).Decode(&want)
-	if err != nil {
-		return
+func apply(req *share.UserConfig, res *share.UserResult, changed *bool) error {
+	if req.F_state == "present" && res.State == "absent" {
+		out, err := exec.Command("adduser", "-D", req.F_name).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("Failed to run adduser: %s", string(out))
+		}
+		*changed = true
+	} else if req.F_state == "absent" && res.State == "present" {
+		out, err := exec.Command("deluser", req.F_name).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("Failed to run deluser: %s", string(out))
+		}
+		*changed = true
+		return nil
 	}
 
-	// get current state
-	var found bool
-	u, err := user.Lookup(want.F_name)
+	// TODO: add non-append option goups.
+	// At this point the groups already
+	// exist within the system. We just have to add them
+	for _, g := range req.F_groups {
+		if slices.Index(res.Groups, g) == -1 { // not found
+			out, err := exec.Command("addgroup", req.F_name, g).CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("Failed to run addgroup: %s", out)
+			}
+			*changed = true
+		}
+	}
+
+	return nil
+}
+
+func currentState(req *share.UserConfig, res *share.UserResult) error {
+	// check existence
+	usr, err := user.Lookup(req.F_name)
 	if _, ok := errors.AsType[user.UnknownUserError](err); ok {
-		found = false
-		err = nil
+		res.State = "absent"
+		return nil
 	} else if err != nil {
-		return
+		return err
 	} else {
-		found = true
+		res.State = "present"
 	}
 
-	if !found {
-		if dryRun {
-			res.WouldChange = true
-			return
-		}
-		var out []byte
-		out, err = exec.Command("adduser", "-D", want.F_name).CombinedOutput()
-		if err != nil {
-			err = fmt.Errorf("Failed to run adduser: %s", string(out))
-			return
-		}
-		res.Changed = true
-	}
-
-	// TODO: create home directory?
-	// TODO: set passwords
-	// TODO: support append := false
-
-	// if not created, look up the user again
-	if u == nil {
-		u, err = user.Lookup(want.F_name)
-		if err != nil {
-			panic(err)
-		}
-	}
-	userGroupIds, err := u.GroupIds()
+	// check groups
+	gids, err := usr.GroupIds()
 	if err != nil {
+		return err
+	}
+	for _, gid := range gids {
+		g, err := user.LookupGroupId(gid)
+		if err != nil {
+			return err
+		}
+		res.Groups = append(res.Groups, g.Name)
+	}
+	return nil
+}
+
+func main() {
+	var req share.UserConfig
+	var before share.UserResult
+	if err := json.NewDecoder(os.Stdin).Decode(&req); err != nil {
+		panic(err) // unreachable
+	}
+
+	err := currentState(&req, &before)
+	if err != nil {
+		before.Error = err.Error()
+		share.Write(&before)
 		return
 	}
 
 	var missingGroups []string
-	var group *user.Group
-	for _, g := range want.F_groups {
-		group, err = user.LookupGroup(g)
-		if _, ok := errors.AsType[user.UnknownGroupError](err); ok {
-			missingGroups = append(missingGroups, g)
-			continue
-		}
-
-		if slices.Index(userGroupIds, group.Gid) == -1 {
-			if dryRun {
-				res.WouldChange = true
-				continue
-			}
-			var out []byte
-			out, err = exec.Command("addgroup", u.Username, group.Name).CombinedOutput()
-			if err != nil {
-				err = fmt.Errorf("Failed to run addgroup: %s", out)
+	if req.F_state == "present" {
+		// are the needed groups even present in the system?
+		for _, g := range req.F_groups {
+			_, err := user.LookupGroup(g)
+			if _, ok := errors.AsType[user.UnknownGroupError](err); ok {
+				missingGroups = append(missingGroups, g)
+			} else if err != nil {
+				before.Error = err.Error()
+				share.Write(&before)
 				return
 			}
-			res.Changed = true
+		}
+
+		if len(missingGroups) > 0 {
+			before.Error = "missing groups"
+			before.MissingGroups = missingGroups
+			share.Write(&before)
+			return
 		}
 	}
 
-	if missingGroups != nil {
-		// no need to populate res.Error it was done above by exec.Command
-		res.MissingGroups = missingGroups
+	var after share.UserResult
+	errAply := apply(&req, &before, &after.Changed)
+
+	if err = currentState(&req, &after); err != nil {
+		after.Error = "cant query after state: " + err.Error()
+		share.Write(&after)
+		return
 	}
 
-	return
-}
-
-func main() {
-	res, err := run()
-	if err != nil && res.Error == "" {
-		res.Error = err.Error()
+	if errAply != nil {
+		after.Error = errAply.Error()
 	}
 
-	b, err := json.MarshalIndent(res, "", "\t")
-	if err != nil {
-		panic(err)
-	}
-	b = append(b, '\n')
-
-	os.Stdout.Write(b)
+	share.Write(&after)
 }

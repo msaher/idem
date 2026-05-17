@@ -60,5 +60,3 @@ func main() {
 
 	share.Write(res)
 }
-
-
