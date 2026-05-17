@@ -1,7 +1,7 @@
 package idem
 
 import (
-	"errors"
+	"fmt"
 
 	"github.com/msaher/idem/share"
 )
@@ -25,6 +25,16 @@ func (cc *CmdConfig) Removes(path string) *CmdConfig {
 	return cc
 }
 
+// TODO: add Exit Code
+type CmdErr struct {
+	Stdout string
+	Stderr string
+}
+
+func (ce *CmdErr) Error() string {
+	return fmt.Sprintf("Command faild. Stderr:\n%s", ce.Stderr)
+}
+
 func (cc *CmdConfig) Run(h *HostCtx) (*CmdResult, error) {
 	var res CmdResult
 	err := run(h, cc, "command", "idem_cmd", &res, &res.Changed)
@@ -32,7 +42,7 @@ func (cc *CmdConfig) Run(h *HostCtx) (*CmdResult, error) {
 		return nil, err
 	}
 	if res.Error != "" {
-		err = errors.New(res.Error)
+		err = &CmdErr{Stdout: res.Stdout, Stderr: res.Stderr}
 		h.Logs[len(h.Logs)-1].Err = err
 		h.Err = err
 	}
