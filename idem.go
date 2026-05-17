@@ -12,6 +12,7 @@ import (
 	"os"
 	"slices"
 	"sync"
+	"strings"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -260,7 +261,13 @@ func run(h *HostCtx, req any, name string, bin string, res any, changed *bool) e
 	return nil
 }
 
-func (h *HostCtx) PrintSummary() {
+func (h *HostCtx) Summary() string {
+    var sb strings.Builder
+    host := h.Host
+    if h.local {
+        host = "local"
+    }
+    fmt.Fprintf(&sb, "=== %s ===\n", host)
     for _, l := range h.Logs {
         status := "ok"
         if l.Changed {
@@ -269,11 +276,12 @@ func (h *HostCtx) PrintSummary() {
         if l.Err != nil {
             status = "failed"
         }
-        fmt.Printf("[%s] %s\n", status, l.Name)
+        fmt.Fprintf(&sb, "[%s] %s\n", status, l.Name)
         if l.Err != nil {
-            fmt.Printf("  error: %v\n", l.Err)
+            fmt.Fprintf(&sb, "  error: %v\n", l.Err)
         }
     }
+    return sb.String()
 }
 
 // Since structured errors are propogated only through the remote binary the
