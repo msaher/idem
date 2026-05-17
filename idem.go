@@ -272,3 +272,27 @@ func (h *HostCtx) PrintSummary() {
 // but since it will be consuing of Results.Err() was a thing and results were
 // compatible with error interface we create a wrapper type... that's essentially
 // an alias with an Err method that pretty prints.
+
+
+// ssh wrappers
+
+func NewHost(addr string, sshConfig *ssh.ClientConfig) *HostCtx {
+	return &HostCtx {
+		Host: addr,
+		SshConfig: sshConfig,
+	}
+}
+
+// should not be used once the hostctx is actually used. We could seperate
+// these two into a builder step but it increases the api surface just to prevent
+// an unlikely mistake.
+
+func (h *HostCtx) WithPort(p int) *HostCtx {
+	h.Port = p
+	return h
+}
+
+func (h *HostCtx) WithSudo(s bool) *HostCtx {
+	h.Sudo = s
+	return h
+}
