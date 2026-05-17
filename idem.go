@@ -171,7 +171,7 @@ func run(h *HostCtx, req any, bin string, res any) error {
 		var b []byte
 		b, err = binaries.ReadFile(filepath.Join("compile", "bin", bin))
 		if err != nil {
-			return nil
+			return err
 		}
 		pth := filepath.Join("/tmp", bin)
 		defer os.Remove(pth)
