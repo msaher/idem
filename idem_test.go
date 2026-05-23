@@ -89,7 +89,7 @@ func TestUser(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name + " create user", func(t *testing.T) {
-			cfg := idem.User("testuser").Groups("wheel")
+			cfg := idem.User("testuser").Groups("wheel").Append(true)
 			_, err := cfg.Run(tc.cont.Host)
 			if err != nil {
 				t.Fatalf("%v", err)
@@ -107,7 +107,7 @@ func TestUser(t *testing.T) {
 		})
 
 		t.Run(tc.name + " idempotent", func(t *testing.T) {
-			cfg := idem.User("testuser").Groups("wheel")
+			cfg := idem.User("testuser").Groups("wheel").Append(true)
 
 			res, err := cfg.Run(tc.cont.Host)
 			if err != nil {

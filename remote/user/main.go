@@ -47,25 +47,42 @@ func apply(req *share.UserConfig, before *share.UserState, changed *bool) error 
 		return nil
 	}
 
-	// TODO: add non-append option goups.
-	// At this point the groups already
-	// exist within the system. We just have to add them
-	hasUserMod := share.Has("usermod")
-	for _, g := range req.F_groups {
-		if slices.Index(before.Groups, g) == -1 {
-			var cmd *exec.Cmd
+	if len(req.F_groups) == 0 {
+		return nil
+	}
 
-			if hasUserMod {
-				cmd = exec.Command("usermod", "-aG", g, req.F_name)
-			} else {
-				// busybox
-				cmd = exec.Command("addgroup", req.F_name, g)
+	switch share.Has("usermod") {
+	case true:
+		args := []string{"usermod", "-G"}
+		if req.F_append {
+			args = append(args, "-a")
+		}
+		args = append(args, req.F_groups...)
+		args = append(args, req.F_name)
+		cmd := exec.Command(args[0], args[1:]...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("Failed to run %s: %s", cmd.Args, string(out))
+		}
+
+		// Did we change anything?
+		for _, g := range req.F_groups {
+			if slices.Index(before.Groups, g) == -1 {
+				*changed = true
 			}
+		}
+	case false:
+		// non-append is such a pain. Unsupported for now
+		for _, g := range req.F_groups {
+			if slices.Index(before.Groups, g) != -1 {
+				continue
+			}
+			var cmd *exec.Cmd
+			cmd = exec.Command("addgroup", req.F_name, g)
 			out, err := cmd.CombinedOutput()
 			if err != nil {
 				return fmt.Errorf("Failed to add group (%s) %s: %s", cmd.Path, g, out)
 			}
-
 			*changed = true
 		}
 	}
@@ -138,6 +155,14 @@ func main() {
 			return
 		}
 	}
+
+	// NOTE: doing non-append with busy box is not supported
+	if len(req.F_groups) > 0 && !req.F_append && !share.Has("usermod") {
+		res.Error = "setting groups without appending in busybox is NOT supported"
+		share.Write(&res)
+		return
+	}
+
 
 	errAply := apply(&req, res.Before, &res.Changed)
 
