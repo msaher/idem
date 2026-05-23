@@ -26,6 +26,7 @@ type UserConfig struct {
 	F_groups []string `json:"groups"`
 	F_append bool `json:"append"`
 	F_password string `json:"password"`
+	F_createHome bool `json:"create_home"`
 }
 
 type FileConfig struct {

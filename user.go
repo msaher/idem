@@ -20,6 +20,7 @@ func User(name string) *UserConfig {
 	return &UserConfig {
 		F_name: name,
 		F_state: "present",
+		F_createHome: true,
 	}
 }
 
@@ -41,6 +42,11 @@ func (cfg *UserConfig) Groups(groups ...string) *UserConfig {
 
 func (cfg *UserConfig) Password(p string) *UserConfig {
 	cfg.F_password = p
+	return cfg
+}
+
+func (cfg *UserConfig) CreateHome(b bool) *UserConfig {
+	cfg.F_createHome = b
 	return cfg
 }
 

@@ -19,9 +19,21 @@ func apply(req *share.UserConfig, before *share.UserState, changed *bool) error 
 		if before.State == "absent" {
 			var cmd *exec.Cmd
 			if share.Has("useradd") {
-				cmd = exec.Command("useradd", "-m", req.F_name)
+				args := []string{"useradd"}
+				if req.F_createHome {
+					args = append(args, "--create-home")
+				} else {
+					args = append(args, "--no-create-home")
+				}
+				args = append(args, req.F_name)
+				cmd = exec.Command(args[0], args[1:]...)
 			} else {
-				cmd = exec.Command("adduser", "-D", req.F_name)
+				args := []string{"adduser", "-D"}
+				if !req.F_createHome {
+					args = append(args, "-H")
+				}
+				args = append(args, req.F_name)
+				cmd = exec.Command(args[0], args[1:]...)
 			}
 			out, err := cmd.CombinedOutput()
 			if err != nil {
