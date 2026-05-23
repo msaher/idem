@@ -279,7 +279,7 @@ func TestFile(t *testing.T) {
 			t.Fatalf("expected file to exist: %v", err)
 		}
 
-		if res.Owner == owner {
+		if res.After.Owner == owner {
 			t.Fatalf("expected owner other than %q. Is host context correct?", owner)
 		}
 
@@ -287,7 +287,7 @@ func TestFile(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
-		if res.Owner != owner {
+		if res.After.Owner != owner {
 			t.Fatalf("expected owner to be %q", owner)
 		}
 	})

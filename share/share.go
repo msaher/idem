@@ -36,13 +36,19 @@ type FileConfig struct {
     F_state string `json:"state"`
 }
 
+type FileState struct {
+	State string
+	Owner string
+	Group string
+	Mode fs.FileMode
+	Path string
+}
+
 type FileResult struct {
 	Changed bool `json:"changed"`
-	Path string `json:"Path"`
-	State string `json:"state"`
-	Mode fs.FileMode `json:"mode"`
-	Owner string `json:"owner"`
 	Error string `json:"error,omitempty"`
+	Before *FileState `json:"before"`
+	After *FileState `json:"after"`
 }
 
 type PackageConfig struct {

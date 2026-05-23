@@ -14,25 +14,25 @@ import (
 
 // TODO: support content
 
-func currentState(path string, res *share.FileResult) error {
+func currentState(path string, s *share.FileState) error {
 	// get current state
 	info, err := os.Stat(path)
 	if errors.Is(err, os.ErrNotExist) {
-		res.State = "absent"
+		s.State = "absent"
 		return nil
 	} else if err != nil {
-		res.State = "unknown"
+		s.State = "unknown"
 		return err
 	}
 
-	res.Path = path
+	s.Path = path
 	if info.IsDir() {
-		res.State = "directory"
+		s.State = "directory"
 	} else { // TODO: check links
-		res.State = "file"
+		s.State = "file"
 	}
 
-	res.Mode = info.Mode()
+	s.Mode = info.Mode()
 
 	// check owner
 	// NOTE: not portable in non-unix
@@ -41,14 +41,14 @@ func currentState(path string, res *share.FileResult) error {
 		// uid := stat.Uid
 		// gid := stat.Gid
 		u, _ := user.LookupId(strconv.Itoa(int(stat.Uid)))
-		res.Owner = u.Username
+		s.Owner = u.Username
 	}
 
 	return nil
 }
 
-func run(req *share.FileConfig, res *share.FileResult) error {
-	if res.State != req.F_state {
+func run(req *share.FileConfig, before *share.FileState) error {
+	if before.State != req.F_state {
 		if req.F_state != "absent" {
 			err := os.RemoveAll(req.F_path)
 			if err != nil {
@@ -120,32 +120,31 @@ func run(req *share.FileConfig, res *share.FileResult) error {
 
 func main() {
 	var req share.FileConfig
-	err := json.NewDecoder(os.Stdin).Decode(&req)
-	// should never happen
-	if err != nil {
-		panic(err)
+	var res share.FileResult
+	res.Before = &share.FileState{}
+	res.After = &share.FileState{}
+	if err := json.NewDecoder(os.Stdin).Decode(&req); err != nil {
+		panic(err) // unreachable
 	}
 
-	var before share.FileResult
-	var after share.FileResult
-	err = currentState(req.F_path, &before)
+	err := currentState(req.F_path, res.Before)
 	if err != nil {
-		before.Error = err.Error()
-		share.Write(&before)
+		res.Error = err.Error()
+		share.Write(&res)
 		return
 	}
 
-	runErr := run(&req, &before)
-	err = currentState(req.F_path, &after)
+	runErr := run(&req, res.Before)
+	err = currentState(req.F_path, res.After)
 	if err != nil {
-		after.Error = err.Error()
+		res.Error = err.Error()
 	} else if runErr != nil {
-		after.Error = runErr.Error()
+		res.Error = runErr.Error()
 	}
 
-	if before != after {
-		after.Changed = true
+	if *res.Before != *res.After {
+		res.Changed = true
 	}
 
-	share.Write(&after)
+	share.Write(&res)
 }
