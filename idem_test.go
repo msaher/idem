@@ -119,7 +119,7 @@ func TestUser(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
-		if res.State != "absent" {
+		if res.After.State != "absent" {
 			t.Fatalf("Expected user to be absent")
 		}
 		err = containerCommand("id", u).Run()
@@ -283,6 +283,7 @@ func TestFile(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected an error because of a bad path")
 		}
+		h.Err = nil
 	})
 }
 

@@ -6,13 +6,16 @@ import (
 	"io/fs"
 )
 
+type UserState struct {
+    State  string   `json:"state"` // "present" or "absent"
+    Groups []string `json:"groups,omitempty"`
+}
 type UserResult struct {
-	State string `json:"state"` // present, absent
-	Groups []string `json:"groups"`
 	Changed bool `json:"changed"`
-	WouldChange bool `json:"would_change,omitempty"`
-	MissingGroups []string `json:"missing_groups,omitempty"`
 	Error string `json:"error,omitempty"`
+	MissingGroups []string `json:"missing_groups,omitempty"`
+	Before *UserState `json:"before"`
+	After *UserState `json:"after"`
 }
 
 type UserConfig struct {
