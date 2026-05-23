@@ -1,6 +1,6 @@
 package main
 
-// TODO: this is half baked. Still have some stuff left to do but you get the idea
+// TODO: add password
 import (
 	"encoding/json"
 	"errors"
@@ -14,30 +14,58 @@ import (
 )
 
 func apply(req *share.UserConfig, before *share.UserState, changed *bool) error {
-	if req.F_state == "present" && before.State == "absent" {
-		out, err := exec.Command("adduser", "-D", req.F_name).CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("Failed to run adduser: %s", string(out))
+	switch req.F_state {
+	case "present":
+		if before.State == "absent" {
+			var cmd *exec.Cmd
+			if share.Has("useradd") {
+				cmd = exec.Command("useradd", "-m", req.F_name)
+			} else {
+				cmd = exec.Command("adduser", "-D", req.F_name)
+			}
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("Failed to run %s: %s", cmd.Path, string(out))
+			}
+			*changed = true
 		}
-		*changed = true
-	} else if req.F_state == "absent" && before.State == "present" {
-		out, err := exec.Command("deluser", req.F_name).CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("Failed to run deluser: %s", string(out))
+	case "absent":
+		if before.State == "present" {
+			var cmd *exec.Cmd
+			if share.Has("userdel") {
+				cmd = exec.Command("userdel", req.F_name)
+			} else {
+				cmd = exec.Command("deluser", req.F_name)
+			}
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("Failed to run %s: %s", cmd.Path, string(out))
+			}
+			*changed = true
+			return nil
 		}
-		*changed = true
 		return nil
 	}
 
 	// TODO: add non-append option goups.
 	// At this point the groups already
 	// exist within the system. We just have to add them
+	hasUserMod := share.Has("usermod")
 	for _, g := range req.F_groups {
-		if slices.Index(before.Groups, g) == -1 { // not found
-			out, err := exec.Command("addgroup", req.F_name, g).CombinedOutput()
-			if err != nil {
-				return fmt.Errorf("Failed to run addgroup: %s", out)
+		if slices.Index(before.Groups, g) == -1 {
+			var cmd *exec.Cmd
+
+			if hasUserMod {
+				cmd = exec.Command("usermod", "-aG", g, req.F_name)
+			} else {
+				// busybox
+				cmd = exec.Command("addgroup", req.F_name, g)
 			}
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("Failed to add group (%s) %s: %s", cmd.Path, g, out)
+			}
+
 			*changed = true
 		}
 	}

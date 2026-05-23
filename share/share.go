@@ -3,6 +3,7 @@ package share
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"io/fs"
 )
 
@@ -10,6 +11,7 @@ type UserState struct {
     State  string   `json:"state"` // "present" or "absent"
     Groups []string `json:"groups,omitempty"`
 }
+
 type UserResult struct {
 	Changed bool `json:"changed"`
 	Error string `json:"error,omitempty"`
@@ -79,3 +81,7 @@ func Write(res any) {
 	os.Stdout.Write(b)
 }
 
+func Has(bin string) bool {
+	_, err := exec.LookPath(bin)
+	return err == nil
+}
