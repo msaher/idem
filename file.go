@@ -35,6 +35,11 @@ func (fc *FileConfig) State(s string) *FileConfig {
 	return fc
 }
 
+func (fc *FileConfig) Group(g string) *FileConfig {
+	fc.F_group = g
+	return fc
+}
+
 func (fc *FileConfig) Run(h *HostCtx) (*FileResult, error) {
 	if fc.F_path[0] != '/' {
 		err := BadPathErr

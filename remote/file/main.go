@@ -49,11 +49,10 @@ func currentState(path string, s *share.FileState) error {
 
 func run(req *share.FileConfig, before *share.FileState) error {
 	if before.State != req.F_state {
-		if req.F_state != "absent" {
-			err := os.RemoveAll(req.F_path)
-			if err != nil {
-				return err
-			}
+		// mismtach --> delete
+		err := os.RemoveAll(req.F_path)
+		if err != nil {
+			return err
 		}
 
 		switch req.F_state {
@@ -80,10 +79,7 @@ func run(req *share.FileConfig, before *share.FileState) error {
 				return err
 			}
 		case "absent":
-			err := os.RemoveAll(req.F_path)
-			if err != nil {
-				return err
-			}
+			break
 		}
 	}
 
@@ -93,6 +89,7 @@ func run(req *share.FileConfig, before *share.FileState) error {
 	}
 
 	// set owner
+	// -1 means do not change the current value
 	uid := -1
 	gid := -1
 	if req.F_owner != "" {
@@ -102,13 +99,25 @@ func run(req *share.FileConfig, before *share.FileState) error {
 		}
 		uidInt, err := strconv.Atoi(u.Uid)
 		if err != nil {
-			panic(err) // unreachanble. uid has to be int
-		}
-		uid = uidInt
-
-		if err := os.Chown(req.F_path, uid, gid); err != nil {
 			return err
 		}
+		uid = uidInt
+	}
+
+	if req.F_group != "" {
+		g, err := user.LookupGroup(req.F_group)
+		if err != nil {
+			return err
+		}
+		gidInt, err := strconv.Atoi(g.Gid)
+		if err != nil {
+			return err
+		}
+		gid = gidInt
+	}
+
+	if err := os.Chown(req.F_path, uid, gid); err != nil {
+		return err
 	}
 
 	if err := os.Chmod(req.F_path, req.F_mode); err != nil {

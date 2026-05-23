@@ -33,6 +33,7 @@ type FileConfig struct {
     F_path  string `json:"path"`
     F_mode  fs.FileMode `json:"mode,omitempty"`
     F_owner string `json:"owner,omitempty"`
+	F_group string `json:"group"`
     F_state string `json:"state"`
 }
 
