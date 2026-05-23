@@ -1,6 +1,5 @@
 package main
 
-// TODO: add password
 import (
 	"encoding/json"
 	"errors"
@@ -9,6 +8,7 @@ import (
 	"os/exec"
 	"os/user"
 	"slices"
+	"strings"
 
 	"github.com/msaher/idem/share"
 )
@@ -47,11 +47,7 @@ func apply(req *share.UserConfig, before *share.UserState, changed *bool) error 
 		return nil
 	}
 
-	if len(req.F_groups) == 0 {
-		return nil
-	}
-
-	switch share.Has("usermod") {
+	switch share.Has("usermod") && len(req.F_groups) > 0 {
 	case true:
 		args := []string{"usermod", "-G"}
 		if req.F_append {
@@ -85,6 +81,22 @@ func apply(req *share.UserConfig, before *share.UserState, changed *bool) error 
 			}
 			*changed = true
 		}
+	}
+
+
+	if req.F_password != "" {
+		cmd := exec.Command("chpasswd")
+
+		cmd.Stdin = strings.NewReader(
+			fmt.Sprintf("%s:%s", req.F_name, req.F_password),
+		)
+
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("chpasswd failed: %s", out)
+		}
+
+		*changed = true
 	}
 
 	return nil

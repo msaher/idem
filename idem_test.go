@@ -158,6 +158,23 @@ func TestUser(t *testing.T) {
 			}
 		})
 
+		t.Run(tc.name + " set password", func(t *testing.T) {
+			username := "withpass"
+			_, err := idem.User(username).Run(tc.cont.Host)
+			if err != nil {
+				t.Fatalf("%v", err)
+			}
+			before, _ := tc.cont.Command("getent", "shadow", username).Output()
+
+			_, err = idem.User(username).Password("pass123").Run(tc.cont.Host)
+			if err != nil {
+				t.Fatalf("%v", err)
+			}
+			after, _ := tc.cont.Command("getent", "shadow", username).Output()
+			if string(before) == string(after) {
+				t.Fatal("password not changed")
+			}
+		})
 	}
 
 }

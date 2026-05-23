@@ -39,6 +39,10 @@ func (cfg *UserConfig) Groups(groups ...string) *UserConfig {
 	return cfg
 }
 
+func (cfg *UserConfig) Password(p string) *UserConfig {
+	cfg.F_password = p
+	return cfg
+}
 
 func (u *UserConfig) Run(h *HostCtx) (*UserResult, error) {
 	var res UserResult
