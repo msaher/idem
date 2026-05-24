@@ -103,7 +103,7 @@ func run(req *share.PackageConfig, res *share.PackageResult, manager string) err
 		if req.F_state == "present" {
 			cmd = exec.Command("pacman", "-S", "--noconfirm", req.F_name)
 		} else {
-			cmd = exec.Command("pacman", "-R", "--noconfirm", req.F_name)
+			cmd = exec.Command("pacman", "-Rns", "--noconfirm", req.F_name)
 		}
 
 	default:
