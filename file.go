@@ -12,6 +12,7 @@ type FileResult share.FileResult
 
 var BadPathErr = errors.New("path must start with '/' character")
 
+// File declares the desired state of a file or directory on the remote host.
 func File(path string) *FileConfig {
 	return &FileConfig{
 		F_path: path,
@@ -30,6 +31,7 @@ func (fc *FileConfig) Owner(o string) *FileConfig {
 }
 
 
+// State sets the desired state: "file", "directory", or "absent".
 func (fc *FileConfig) State(s string) *FileConfig {
 	fc.F_state = s
 	return fc
@@ -40,6 +42,7 @@ func (fc *FileConfig) Group(g string) *FileConfig {
 	return fc
 }
 
+// Link sets state to "link" and src as the symlink target.
 func (fc *FileConfig) Link(src string) *FileConfig {
 	fc.F_state = "link"
 	fc.F_src = src

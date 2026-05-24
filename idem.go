@@ -20,27 +20,38 @@ import (
 //go:embed compile/bin/*
 var binaries embed.FS
 
+// Log represents an attempted change to a host.
 type Log struct {
 	Name string `json:"name"`
 	Changed bool `json:"changed"`
+
+	// Error message (extracted from the Result)
 	Err error `json:"err,omitempty"`
+
+	// Pointer to the corresponding result struct
 	Result any `json:"result"`
 }
 
 var NoOp = errors.New("Host Context has its error set. No action was taken")
 
+// HostCtx holds the connection state and execution context for a remote or local host.
 type HostCtx struct {
 	Host      string
 	Port      int
 	Sudo      bool
 	SshConfig *ssh.ClientConfig
 	Client *ssh.Client
+
+	// Last encountered error. If this is set. Calls to Run(h) will return a NoOp error
 	Err error
+
 	Logs []*Log
 	local bool
 	cachedBinaries []string
 }
 
+// A Special HostCtx that runs locally. It does not ssh at all, but instead
+// pushes the binaries in /tmp and executes them
 var Local = &HostCtx{local: true}
 
 func (h *HostCtx) dial() (*ssh.Client, error) {
@@ -56,6 +67,7 @@ func (h *HostCtx) dial() (*ssh.Client, error) {
 	return client, err
 }
 
+// Closes ssh connection (if any), and deletes the cached binaries
 func (h *HostCtx) Done() error {
 	if h.local {
 		for _, b := range h.cachedBinaries {
@@ -261,6 +273,7 @@ func run(h *HostCtx, req any, name string, bin string, res any, changed *bool) e
 	return nil
 }
 
+// Summary returns a human-readable summary of all changes made during this session
 func (h *HostCtx) Summary() string {
     var sb strings.Builder
     host := h.Host
@@ -295,6 +308,7 @@ func (h *HostCtx) Summary() string {
 
 // ssh wrappers
 
+// NewHost creates a new HostCtx for the given address and SSH config.
 func NewHost(addr string, sshConfig *ssh.ClientConfig) *HostCtx {
 	return &HostCtx {
 		Host: addr,
@@ -306,16 +320,21 @@ func NewHost(addr string, sshConfig *ssh.ClientConfig) *HostCtx {
 // these two into a builder step but it increases the api surface just to prevent
 // an unlikely mistake.
 
+// WithPort sets the SSH port. Defaults to 22.
 func (h *HostCtx) WithPort(p int) *HostCtx {
 	h.Port = p
 	return h
 }
 
+// WithSudo runs all commands with sudo.
 func (h *HostCtx) WithSudo(s bool) *HostCtx {
 	h.Sudo = s
 	return h
 }
 
+// ForEach runs f in parallel. This is useful when you need to provision
+// multiple servers wihtout having to wait for each one to
+// complete
 func ForEach(hs []*HostCtx, f func(h *HostCtx)) {
 	var wg sync.WaitGroup
 	for _, h := range hs {

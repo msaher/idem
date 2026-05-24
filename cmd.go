@@ -9,23 +9,25 @@ import (
 type CmdConfig share.CmdConfig
 type CmdResult share.CmdResult
 
+// Command runs an arbitrary command on the host.
 func Command(name string, args ...string) *CmdConfig {
 	argv := []string{name}
 	argv = append(argv, args...)
 	return &CmdConfig{F_argv: argv}
 }
 
+// Creates skips the command if the given path already exists. Useful for idempotency.
 func (cc *CmdConfig) Creates(path string) *CmdConfig {
 	cc.F_creates = path
 	return cc
 }
 
+// Removes skips the command if the given path does not exist. Useful for idempotency.
 func (cc *CmdConfig) Removes(path string) *CmdConfig {
 	cc.F_removes = path
 	return cc
 }
 
-// TODO: add Exit Code
 type CmdErr struct {
 	Stdout string
 	Stderr string

@@ -1,6 +1,6 @@
 # `idem`
 
-`idem` is a library for provisioning servers through an idempotent API. It's similar to tools like ansible.
+Package `idem` provides declarative system configuration primitives through an idempotent API. It's inspired by tools like ansible.
 
 ```go
 h := idem.NewHost("127.0.0.1", sshConfig).WithPort(8022).WithSudo(true)

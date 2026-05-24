@@ -11,6 +11,7 @@ import (
 type CopyConfig share.CopyConfig
 type CopyResult share.CopyResult
 
+// CopyFile reads src from the local filesystem and copies it to dst on the remote host.
 func CopyFile(src string, dst string) *CopyConfig {
 	return &CopyConfig {
 		F_src: src,
@@ -18,6 +19,7 @@ func CopyFile(src string, dst string) *CopyConfig {
 	}
 }
 
+// CopyContent copies the given string content to dst on the remote host.
 func CopyContent(content string, dst string) *CopyConfig {
 	return &CopyConfig {
 		F_content: content,
