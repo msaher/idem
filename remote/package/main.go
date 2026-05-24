@@ -11,17 +11,23 @@ import (
 	"github.com/msaher/idem/share"
 )
 
-var packageMangers = map[string]string {
-	"alpine": "apk",
-	"ubuntu": "apt",
-	"debian": "apt",
-	"arch": "pacman",
+var packageManagers = map[string]string{
+    "alpine":  "apk",
+    "ubuntu":  "apt",
+    "debian":  "apt",
+    "arch":    "pacman",
+    "fedora":  "dnf",
+    "rhel":    "dnf",
+    "centos":  "dnf",
+    "rocky":   "dnf",
+    "alma":    "dnf",
 }
 
-var knownPackageManagers = map[string]struct{} {
-	"apk": {},
-	"pacman": {},
-	"apt": {},
+var knownPackageManagers = map[string]struct{}{
+    "apk":    {},
+    "pacman": {},
+    "apt":    {},
+    "dnf":    {},
 }
 
 func resolvePackageManager(req *share.PackageConfig) (string, error) {
@@ -41,7 +47,7 @@ func resolvePackageManager(req *share.PackageConfig) (string, error) {
 			return "", errors.New("cant determine operating system")
 		}
 
-		manager = packageMangers[osName]
+		manager = packageManagers[osName]
 		if manager == "" {
 			return "", fmt.Errorf("operating system is %q, but don't know its package manager", osName)
 		}
@@ -64,6 +70,8 @@ func currentState(manager, name string, res *share.PackageResult) error {
 		err = exec.Command("dpkg", "-s", name).Run()
 	case "pacman":
 		err = exec.Command("pacman", "-Q", name).Run()
+	case "dnf":
+		err = exec.Command("rpm", "-q", name).Run()
 	default:
 		panic("unreachable")
 	}
@@ -104,6 +112,13 @@ func run(req *share.PackageConfig, res *share.PackageResult, manager string) err
 			cmd = exec.Command("pacman", "-S", "--noconfirm", req.F_name)
 		} else {
 			cmd = exec.Command("pacman", "-Rns", "--noconfirm", req.F_name)
+		}
+
+	case "dnf":
+		if req.F_state == "present" {
+			cmd = exec.Command("dnf", "install", "-y", req.F_name)
+		} else {
+			cmd = exec.Command("dnf", "remove", "-y", req.F_name)
 		}
 
 	default:
