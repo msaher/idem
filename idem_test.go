@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -412,6 +413,46 @@ func TestCmd(t *testing.T) {
 		res, err = tsk.Run(cont.Host)
 		if res.Changed {
 			t.Fatalf("expected change to be false")
+		}
+	})
+}
+
+func noerr(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestCopy(t *testing.T) {
+	t.Run("copies a file", func(t *testing.T) {
+		dir := t.TempDir()
+		src := filepath.Join(dir, "src.txt")
+		content := []byte("hello\n")
+		err := os.WriteFile(src, content, 0644)
+		noerr(t, err)
+
+		dst := "/some/where/dst.txt"
+		_, err = idem.CopyFile(src, dst).Run(cont.Host)
+		noerr(t, err)
+
+		out, err := cont.Command("cat", dst).Output()
+		noerr(t, err)
+		if string(out) != string(content) {
+			t.Fatalf("Unexpected content in destination: %s", content)
+		}
+	})
+
+	t.Run("copies content", func(t *testing.T) {
+		dst := "/x/y/content.txt"
+		content := "some content"
+		_, err := idem.CopyContent(content, dst).Run(cont.Host)
+		noerr(t, err)
+		out, err := cont.Command("cat", dst).Output()
+		noerr(t, err)
+
+		if string(out) != string(content) {
+			t.Fatalf("Unexpected content in destination: %s", content)
 		}
 	})
 }

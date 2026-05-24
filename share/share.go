@@ -80,6 +80,29 @@ type CmdResult struct {
     Error    string `json:"error,omitempty"`
 }
 
+type CopyConfig struct {
+    F_src     string      `json:"src"`     // local path
+    F_dest    string      `json:"dest"`
+    F_content string      `json:"content"` // inline content
+    F_owner   string      `json:"owner,omitempty"`
+    F_group   string      `json:"group,omitempty"`
+    F_mode    fs.FileMode `json:"mode,omitempty"`
+}
+
+type CopyState struct {
+    Exists bool   `json:"exists"`
+    Hash   string `json:"hash"` // sha256 of content
+    Owner  string `json:"owner,omitempty"`
+    Group  string `json:"group,omitempty"`
+    Mode   fs.FileMode `json:"mode,omitempty"`
+}
+
+type CopyResult struct {
+    Changed bool   `json:"changed"`
+    Error   string `json:"error,omitempty"`
+    Before  *CopyState `json:"before"`
+    After   *CopyState `json:"after"`
+}
 
 func Write(res any) {
 	b, err := json.MarshalIndent(res, "", "\t")

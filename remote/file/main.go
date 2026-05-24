@@ -46,7 +46,9 @@ func currentState(path string, s *share.FileState) error {
 		// uid := stat.Uid
 		// gid := stat.Gid
 		u, _ := user.LookupId(strconv.Itoa(int(stat.Uid)))
+		g, _ := user.LookupGroupId(strconv.Itoa(int(stat.Gid)))
 		s.Owner = u.Username
+		s.Group = g.Name
 	}
 
 	return nil
