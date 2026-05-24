@@ -43,7 +43,7 @@ func resolvePackageManager(req *share.PackageConfig) (string, error) {
 
 		manager = packageMangers[osName]
 		if manager == "" {
-			return "", fmt.Errorf("operating system is %q, but don't know its package manager")
+			return "", fmt.Errorf("operating system is %q, but don't know its package manager", osName)
 		}
 	}
 
