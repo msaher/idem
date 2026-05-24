@@ -35,6 +35,7 @@ type FileConfig struct {
     F_owner string `json:"owner,omitempty"`
 	F_group string `json:"group"`
     F_state string `json:"state"`
+	F_src string `json:"src"` // for links
 }
 
 type FileState struct {
@@ -43,6 +44,7 @@ type FileState struct {
 	Group string
 	Mode fs.FileMode
 	Path string
+	Src string // for symbolic links
 }
 
 type FileResult struct {

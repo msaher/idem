@@ -12,11 +12,9 @@ import (
 	"github.com/msaher/idem/share"
 )
 
-// TODO: support content
-
 func currentState(path string, s *share.FileState) error {
 	// get current state
-	info, err := os.Stat(path)
+	info, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {
 		s.State = "absent"
 		return nil
@@ -28,7 +26,14 @@ func currentState(path string, s *share.FileState) error {
 	s.Path = path
 	if info.IsDir() {
 		s.State = "directory"
-	} else { // TODO: check links
+	} else if info.Mode()&os.ModeSymlink != 0 {
+		s.State = "link"
+		target, err := os.Readlink(path)
+		if err != nil {
+			return err
+		}
+		s.Src = target
+	} else { // TODO: support hard links
 		s.State = "file"
 	}
 
@@ -70,6 +75,7 @@ func run(req *share.FileConfig, before *share.FileState) error {
 				return err
 			}
 			f.Close()
+
 		case "directory":
 			if req.F_mode == 0 {
 				req.F_mode = 0755
@@ -78,6 +84,17 @@ func run(req *share.FileConfig, before *share.FileState) error {
 			if err != nil {
 				return err
 			}
+
+		case "link":
+			err := os.MkdirAll(filepath.Dir(req.F_path), 0755)
+			if err != nil {
+				return err
+			}
+			err = os.Symlink(req.F_src, req.F_path)
+			if err != nil {
+				return err
+			}
+
 		case "absent":
 			break
 		}
@@ -116,12 +133,17 @@ func run(req *share.FileConfig, before *share.FileState) error {
 		gid = gidInt
 	}
 
-	if err := os.Chown(req.F_path, uid, gid); err != nil {
+	if err := os.Lchown(req.F_path, uid, gid); err != nil {
 		return err
 	}
 
-	if err := os.Chmod(req.F_path, req.F_mode); err != nil {
-		return err
+	// dangerous footgun. If you chmod a link it will actually follow the
+	// symbolik link. Linux ignores permissions for symbolik links so no need
+	// to put permissions here.
+	if req.F_state != "link" {
+		if err := os.Chmod(req.F_path, req.F_mode); err != nil {
+			return err
+		}
 	}
 
 	return nil

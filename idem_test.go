@@ -331,6 +331,16 @@ func TestFile(t *testing.T) {
 		}
 		cont.Host.Err = nil
 	})
+
+	t.Run("symbolic link", func(t *testing.T) {
+		pth := "/a/symbolic/link"
+		src := "/bin/ls"
+		_, err := idem.File(pth).Link(src).Run(cont.Host)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+
+	})
 }
 
 func TestPackage(t *testing.T) {

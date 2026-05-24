@@ -40,6 +40,12 @@ func (fc *FileConfig) Group(g string) *FileConfig {
 	return fc
 }
 
+func (fc *FileConfig) Link(src string) *FileConfig {
+	fc.F_state = "link"
+	fc.F_src = src
+	return fc
+}
+
 func (fc *FileConfig) Run(h *HostCtx) (*FileResult, error) {
 	if fc.F_path[0] != '/' {
 		err := BadPathErr
